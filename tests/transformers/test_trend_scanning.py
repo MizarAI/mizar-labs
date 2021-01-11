@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 from mizarlabs.static import CLOSE
 from mizarlabs.static import LABEL
-from mizarlabs.static  import RETURN
+from mizarlabs.static import RETURN
 from mizarlabs.static import T_VALUE
 from mizarlabs.transformers.targets.trend_scanning import TrendScannerLabeling
 

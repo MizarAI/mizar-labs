@@ -5,6 +5,7 @@ from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
 from mizarlabs import static
 
+
 class KyleLambda(BaseEstimator, TransformerMixin):
     """
      Kyle lambda liquidity estimator (p.286).

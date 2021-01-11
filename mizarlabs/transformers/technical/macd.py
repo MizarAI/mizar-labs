@@ -4,8 +4,8 @@ import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
 
-class MACDHistogramCrossOver(BaseEstimator, TransformerMixin):
 
+class MACDHistogramCrossOver(BaseEstimator, TransformerMixin):
     def __init__(
         self,
         fast_period: int = 12,
@@ -20,14 +20,14 @@ class MACDHistogramCrossOver(BaseEstimator, TransformerMixin):
         self.slow_period_ = slow_period
         self.signal_period_ = signal_period
         self.column_name = column_name
-        self.transformer_ =  TAFactory().create_transformer(
+        self.transformer_ = TAFactory().create_transformer(
             "MACD",
             self.column_name,
             kw_args={
                 "fastperiod": fast_period,
                 "slowperiod": slow_period,
-                "signalperiod": signal_period
-            }
+                "signalperiod": signal_period,
+            },
         )
 
     def fit(self, X, y=None, **fit_params):

@@ -112,8 +112,7 @@ class MovingAverageCrossOverPredictor(MovingAverageCrossOver):
         return probabilities
 
 
-class ExponentialWeightedMovingAverageDifference():
-
+class ExponentialWeightedMovingAverageDifference:
     def __init__(
         self,
         fast: int,
@@ -129,7 +128,6 @@ class ExponentialWeightedMovingAverageDifference():
         self.normalised = normalised
         self.column_name = column_name
 
-
     def fit(self, X, y=None, **fit_params):
         return self
 
@@ -140,6 +138,8 @@ class ExponentialWeightedMovingAverageDifference():
         ewma_difference = fast_ewma - slow_ewma
 
         if self.normalised:
-            return (ewma_difference / (fast_ewma + 1)).values.reshape(-1, 1) # plus one to avoid zero division error
+            return (ewma_difference / (fast_ewma + 1)).values.reshape(
+                -1, 1
+            )  # plus one to avoid zero division error
         else:
             return ewma_difference.values.reshape(-1, 1)

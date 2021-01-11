@@ -28,8 +28,8 @@ class BuySellImbalance(BaseEstimator, TransformerMixin):
             - X[f"{self.volume_type}_asset_sell_volume"].ewm(span=self.slow).mean()
         )
 
-        fast_sell_crossover_normalised = (
-            fast_buy_sell_diff - slow_buy_sell_diff
-        ) / (X[f"{self.volume_type}_asset_volume"] + 1)
+        fast_sell_crossover_normalised = (fast_buy_sell_diff - slow_buy_sell_diff) / (
+            X[f"{self.volume_type}_asset_volume"] + 1
+        )
 
         return fast_sell_crossover_normalised.values.reshape(-1, 1)

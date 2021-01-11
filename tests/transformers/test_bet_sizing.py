@@ -13,6 +13,7 @@ from mizarlabs.transformers.trading.bet_sizing import PROBABILITY
 from scipy.stats import norm
 from mizarlabs.static import SIDE
 
+
 @pytest.mark.parametrize("step_size", [0.01, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5])
 @pytest.mark.usefixtures("dataframe_for_bet_sizing_testing_2_classes")
 def test_discrete_signal(step_size, dataframe_for_bet_sizing_testing_2_classes):
