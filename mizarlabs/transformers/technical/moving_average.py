@@ -110,3 +110,36 @@ class MovingAverageCrossOverPredictor(MovingAverageCrossOver):
         for i, class_value in enumerate(self.classes_):
             probabilities[:, i] = predictions == class_value
         return probabilities
+
+
+class ExponentialWeightedMovingAverageDifference:
+    def __init__(
+        self,
+        fast: int,
+        slow: int,
+        column_name: str,
+        normalised: bool = True,
+    ):
+
+        if fast > slow:
+            raise ValueError("Fast should be smaller than slow")
+        self.fast_ = fast
+        self.slow_ = slow
+        self.normalised = normalised
+        self.column_name = column_name
+
+    def fit(self, X, y=None, **fit_params):
+        return self
+
+    def transform(self, X: pd.DataFrame) -> np.ndarray:
+        fast_ewma = X[self.column_name].ewm(span=self.fast_).mean()
+        slow_ewma = X[self.column_name].ewm(span=self.slow_).mean()
+
+        ewma_difference = fast_ewma - slow_ewma
+
+        if self.normalised:
+            return (ewma_difference / (fast_ewma + 1)).values.reshape(
+                -1, 1
+            )  # plus one to avoid zero division error
+        else:
+            return ewma_difference.values.reshape(-1, 1)

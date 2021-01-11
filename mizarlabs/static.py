@@ -28,6 +28,3 @@ PROFIT_TAKING = "profit_taking"
 RETURN = "return"
 LABEL = "label"
 T_VALUE = "t_value"
-
-
-

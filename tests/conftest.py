@@ -30,10 +30,10 @@ from mizarlabs.transformers.microstructural_features.vpin import VPIN
 
 
 def prepare_cv_object(
-        cv: BaseTimeSeriesCrossValidator,
-        n_samples: int,
-        time_shift: str,
-        randomlize_times: bool,
+    cv: BaseTimeSeriesCrossValidator,
+    n_samples: int,
+    time_shift: str,
+    randomlize_times: bool,
 ):
     X, pred_times, eval_times = create_random_sample_set(
         n_samples=n_samples, time_shift=time_shift, randomize_times=randomlize_times
@@ -55,7 +55,7 @@ def create_test_df(n_samples: int, n_columns: int, freq: str):
 
 
 def create_random_sample_set(
-        n_samples, time_shift="120m", randomize_times=False, freq="60T"
+    n_samples, time_shift="120m", randomize_times=False, freq="60T"
 ):
     # Create artificial data
     n_columns = 3
@@ -69,20 +69,20 @@ def create_random_sample_set(
         # the prediction and evaluation times
         rand_fact = (
             create_test_df(n_samples, n_columns, freq)
-                .reset_index(drop=True)
-                .squeeze()
-                .iloc[: len(test_df)]
-                .abs()
+            .reset_index(drop=True)
+            .squeeze()
+            .iloc[: len(test_df)]
+            .abs()
         )
         test_df["index"] = test_df["index"].subtract(
             rand_fact.apply(lambda x: x * pd.Timedelta(time_shift))
         )
         rand_fact = (
             create_test_df(n_samples, n_columns, freq)
-                .reset_index(drop=True)
-                .squeeze()
-                .iloc[: len(test_df)]
-                .abs()
+            .reset_index(drop=True)
+            .squeeze()
+            .iloc[: len(test_df)]
+            .abs()
         )
         test_df["index2"] = test_df["index"].add(
             rand_fact.apply(lambda x: x * pd.Timedelta(time_shift))
@@ -106,8 +106,8 @@ def time_bar_dataframe() -> pd.DataFrame:
     )
     object_columns = time_bar_dataframe.select_dtypes(include="object").columns
     time_bar_dataframe.loc[:, object_columns] = time_bar_dataframe.loc[
-                                                :, object_columns
-                                                ].astype(float)
+        :, object_columns
+    ].astype(float)
     time_bar_dataframe.set_index(
         time_bar_dataframe.index.tz_convert(None), inplace=True
     )
@@ -138,8 +138,8 @@ def dollar_bar_dataframe() -> pd.DataFrame:
 
     object_columns = dollar_bar_dataframe.select_dtypes(include="object").columns
     dollar_bar_dataframe.loc[:, object_columns] = dollar_bar_dataframe.loc[
-                                                  :, object_columns
-                                                  ].astype(float)
+        :, object_columns
+    ].astype(float)
 
     dollar_bar_dataframe.set_index(
         pd.to_datetime(
@@ -174,7 +174,7 @@ def dataframe_for_bet_sizing_testing_2_classes(request):
     shift_dt = np.array([datetime.timedelta(days=d) for d in shift_list])
     dates_shifted = dates + shift_dt
     if request.param != 0:
-        dates_shifted[-request.param:] = np.nan
+        dates_shifted[-request.param :] = np.nan
     # Calculate the test statistic and bet size.
     z_test = (prob_arr - 0.5) / (prob_arr * (1 - prob_arr)) ** 0.5
     m_signal = side_arr * (2 * norm.cdf(z_test) - 1)
@@ -208,7 +208,7 @@ def dataframe_for_bet_sizing_testing_3_classes(request):
     shift_dt = np.array([datetime.timedelta(days=d) for d in shift_list])
     dates_shifted = dates + shift_dt
     if request.param != 0:
-        dates_shifted[-request.param:] = np.nan
+        dates_shifted[-request.param :] = np.nan
     # Calculate the test statistic and bet size.
     z_test = (prob_arr - 0.5) / (prob_arr * (1 - prob_arr)) ** 0.5
     m_signal = side_arr * (2 * norm.cdf(z_test) - 1)
@@ -319,7 +319,7 @@ def ind_matrix():
 
 @pytest.fixture
 def X_train_perfect(
-        dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.DataFrame
+    dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.DataFrame
 ):
     idx = 100
     X_train_perfect = dollar_bar_target_labels[[LABEL]].iloc[:idx]
@@ -328,7 +328,7 @@ def X_train_perfect(
 
 @pytest.fixture
 def X_train_random(
-        dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.DataFrame
+    dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.DataFrame
 ):
     idx = 100
     return pd.DataFrame(
@@ -346,7 +346,7 @@ def y_train(dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.Dat
 
 @pytest.fixture
 def X_test_perfect(
-        dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.DataFrame
+    dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.DataFrame
 ):
     idx = 100
     return dollar_bar_target_labels[[LABEL]].iloc[-idx:]
@@ -354,7 +354,7 @@ def X_test_perfect(
 
 @pytest.fixture
 def X_test_random(
-        dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.DataFrame
+    dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.DataFrame
 ):
     idx = 100
     return pd.DataFrame(
@@ -479,9 +479,9 @@ def strategy_signal_pipeline_with_metalabeling(bar_feature_generator):
 
 @pytest.fixture
 def strategy_signal_pipeline_with_metalabeling_fitted(
-        dollar_bar_dataframe,
-        dollar_bar_labels_and_info,
-        strategy_signal_pipeline_with_metalabeling,
+    dollar_bar_dataframe,
+    dollar_bar_labels_and_info,
+    strategy_signal_pipeline_with_metalabeling,
 ):
     return strategy_signal_pipeline_with_metalabeling.fit(
         X_dict={
@@ -521,9 +521,9 @@ def strategy_signal_pipeline_with_metalabeling_and_pred_features(bar_feature_gen
 
 @pytest.fixture
 def strategy_signal_pipeline_with_metalabeling_and_pred_features_fitted(
-        dollar_bar_dataframe,
-        dollar_bar_labels_and_info,
-        strategy_signal_pipeline_with_metalabeling_and_pred_features,
+    dollar_bar_dataframe,
+    dollar_bar_labels_and_info,
+    strategy_signal_pipeline_with_metalabeling_and_pred_features,
 ):
     return strategy_signal_pipeline_with_metalabeling_and_pred_features.fit(
         X_dict={
@@ -553,9 +553,9 @@ def strategy_signal_pipeline_only_primary(bar_feature_generator):
 
 @pytest.fixture
 def strategy_signal_pipeline_only_primary_fitted(
-        dollar_bar_dataframe,
-        dollar_bar_labels_and_info,
-        strategy_signal_pipeline_only_primary,
+    dollar_bar_dataframe,
+    dollar_bar_labels_and_info,
+    strategy_signal_pipeline_only_primary,
 ):
     return strategy_signal_pipeline_only_primary.fit(
         X_dict={"primary_0": dollar_bar_dataframe},
