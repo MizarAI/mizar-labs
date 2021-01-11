@@ -1,4 +1,7 @@
 import datetime
+import pandas as pd
+
+from mizarlabs.transformers.technical.moving_average import ExponentialWeightedMovingAverageDifference
 
 
 def test_moving_average_crossover_only_one_up(
@@ -138,3 +141,15 @@ def test_moving_average_predictor_predict(
     """
     predictions = moving_average_cross_over_predictor.predict(dollar_bar_dataframe)
     assert set(predictions) == {-1.0, 1.0, 0.0}, "Only 1, -1 and 0 are expected"
+
+def test_exponential_weighted_moving_average_difference(
+    dollar_bar_dataframe: pd.DataFrame
+):
+    fast = 10
+    slow = 20
+    ewma_diff_norm = ExponentialWeightedMovingAverageDifference(fast=fast, slow=slow, column_name="close", normalised=True)
+    ewma_diff_unnorm = ExponentialWeightedMovingAverageDifference(fast=fast, slow=slow, column_name="close", normalised=False)
+    norm_out = ewma_diff_norm.transform(dollar_bar_dataframe)
+    unnorm_out = ewma_diff_unnorm.transform(dollar_bar_dataframe)
+
+    assert (norm_out != unnorm_out).any(), "Expected different values but got the same"
