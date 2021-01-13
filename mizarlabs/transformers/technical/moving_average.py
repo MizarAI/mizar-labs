@@ -101,10 +101,10 @@ class MovingAverageCrossOverPredictor(MovingAverageCrossOver):
     classes_ = [-1.0, 0.0, 1.0]
     n_classes_ = 3
 
-    def predict(self, X: pd.DataFrame):
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
         return self.transform(X).flatten()
 
-    def predict_proba(self, X: pd.DataFrame):
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         predictions = self.predict(X)
         probabilities = np.zeros(shape=(len(predictions), len(self.classes_)))
         for i, class_value in enumerate(self.classes_):

@@ -177,12 +177,15 @@ def seq_bootstrap(
     avg_unique = np.ones(ind_mat.shape[1])
     samples_to_update = np.array([], dtype=int)
 
+    print(f"sample length {sample_length}")
+    import time; start_time = time.perf_counter()
     for i in range(sample_length):
         if samples_to_update.shape[0] != 0:
+            start_time_loop_run = time.perf_counter_ns()
             avg_unique = _bootstrap_loop_run(
                 ind_mat, prev_concurrency, avg_unique, samples_to_update
             )
-
+            print(f"numba _bootstrap_loop_run took {time.perf_counter_ns() - start_time_loop_run}")
         prob = avg_unique / np.sum(avg_unique)  # Draw prob
 
         if warmup_samples:
@@ -201,5 +204,5 @@ def seq_bootstrap(
 
         if verbose is True:
             logging.info(f"Probability: {prob}")
-
+    import time; print(f"loop finished in {time.perf_counter() - start_time}")
     return bootstrapped_samples

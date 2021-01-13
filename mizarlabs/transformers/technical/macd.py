@@ -38,3 +38,18 @@ class MACDHistogramCrossOver(BaseEstimator, TransformerMixin):
         macd_df = pd.DataFrame(self.transformer_.transform(X))
 
         return np.sign(macd_df[2]).diff().values.reshape(-1, 1) / 2
+
+
+class MACDHistogramCrossOverPredictor(MACDHistogramCrossOver):
+    classes_ = [-1.0, 0.0, 1.0]
+    n_classes_ = 3
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        return self.transform(X).flatten()
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        predictions = self.predict(X)
+        probabilities = np.zeros(shape=(len(predictions), len(self.classes_)))
+        for i, class_value in enumerate(self.classes_):
+            probabilities[:, i] = predictions == class_value
+        return probabilities

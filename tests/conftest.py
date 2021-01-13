@@ -321,7 +321,7 @@ def ind_matrix():
 def X_train_perfect(
     dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.DataFrame
 ):
-    idx = 100
+    idx = 467
     X_train_perfect = dollar_bar_target_labels[[LABEL]].iloc[:idx]
     return X_train_perfect
 
@@ -330,7 +330,7 @@ def X_train_perfect(
 def X_train_random(
     dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.DataFrame
 ):
-    idx = 100
+    idx = 467
     return pd.DataFrame(
         np.random.random(idx),
         index=dollar_bar_target_labels.index[:idx],
@@ -340,7 +340,7 @@ def X_train_random(
 
 @pytest.fixture
 def y_train(dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.DataFrame):
-    idx = 100
+    idx = 467
     return dollar_bar_target_labels[LABEL].iloc[:idx]
 
 
@@ -348,7 +348,7 @@ def y_train(dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.Dat
 def X_test_perfect(
     dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.DataFrame
 ):
-    idx = 100
+    idx = 467
     return dollar_bar_target_labels[[LABEL]].iloc[-idx:]
 
 
@@ -356,7 +356,7 @@ def X_test_perfect(
 def X_test_random(
     dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.DataFrame
 ):
-    idx = 100
+    idx = 467
     return pd.DataFrame(
         np.random.random(idx),
         index=dollar_bar_target_labels.index[-idx:],
@@ -366,7 +366,7 @@ def X_test_random(
 
 @pytest.fixture
 def y_test(dollar_bar_dataframe: pd.DataFrame, dollar_bar_target_labels: pd.DataFrame):
-    idx = 100
+    idx = 467
     return dollar_bar_target_labels[[LABEL]].iloc[-idx:]
 
 

@@ -134,6 +134,9 @@ class StrategySignalPipeline:
         metalabeling_use_predictions_primary_model: bool = True,
         bet_sizer: Union[BetSizingFromProbabilities, None] = None,
     ):
+
+        # TODO: check whether the primary model and metalabeling model
+        #  have all the expected methods (predict and predict_proba)
         self.primary_model = primary_model
 
         self.feature_transformers_primary_model = (
@@ -406,7 +409,7 @@ class StrategySignalPipeline:
                 self.sample_weight_primary,
             )
 
-        # If downsampled_indices_primary is set2 for the metalabeling model indices
+        # If downsampled_indices_primary is set for the metalabeling model indices
         # then we reduced the input data to the selected indices
         if self.downsampled_indices_metalabeling is not None:
             (
@@ -446,6 +449,10 @@ class StrategySignalPipeline:
 
         # If metalabeing exists then we fit it
         if self.metalabeling_model is not None:
+            if self.downsampled_indices_metalabeling is not None:
+                X_primary_aligned = X_primary_aligned.loc[y_metalabeling.index]
+                y_primary_aligned = y_primary_aligned.loc[y_metalabeling.index]
+
             self._fit_metalabeling_model(
                 X_features_dict_metalabeling,
                 X_primary_aligned,
@@ -570,6 +577,9 @@ class StrategySignalPipeline:
         # fitting and predicting the primary model on
         # the cv splits for the creation of the
         # metalabeling labels
+        # FIXME: for simple primary models like MACD we should skip this
+        # especially in the case of down sampling, as you cannot fit and predict on a
+        # downsampled dataset for MACD cross over model
         for train_index, val_index in self._cv.split(
             X=X_primary_aligned, y=y_primary_aligned
         ):
@@ -715,15 +725,15 @@ class StrategySignalPipeline:
         )
         return {
             self._primary_model_features: {
-                name_transformer: transformer.transform(X_dict[name_transformer])
+                name_transformer: transformer.transform(X_dict[name_transformer].copy())
                 if transformer
-                else X_dict[name_transformer]
+                else X_dict[name_transformer].copy()
                 for name_transformer, transformer in self.feature_transformers_primary_model.items()
             },
             self._metalabeling_model_features: {
-                name_transformer: transformer.transform(X_dict[name_transformer])
+                name_transformer: transformer.transform(X_dict[name_transformer].copy())
                 if transformer
-                else X_dict[name_transformer]
+                else X_dict[name_transformer].copy()
                 for name_transformer, transformer in self.feature_transformers_metalabeling_model.items()
             },
         }

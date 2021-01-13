@@ -99,9 +99,11 @@ def _generate_bagging_indices(
     feature_indices = _generate_random_features(
         random_state, bootstrap_features, n_features, max_features
     )
+    print("running sequential bootstrap")
     sample_indices = seq_bootstrap(
         ind_mat, sample_length=max_samples, random_state=random_state
     )
+    print("running sequential bootstrap finished")
 
     return feature_indices, sample_indices
 
@@ -166,6 +168,7 @@ def _parallel_build_estimators(
         random_state = np.random.RandomState(seeds[i])
         estimator = ensemble._make_estimator(append=False, random_state=random_state)
 
+        print("generating bagging indices")
         # Draw random feature, sample indices
         features, indices = _generate_bagging_indices(
             random_state,
@@ -175,6 +178,7 @@ def _parallel_build_estimators(
             max_samples,
             ind_mat,
         )
+        print("generated bagging indices")
 
         # Draw samples, using sample weights, and then fit
         if support_sample_weight:
@@ -401,7 +405,7 @@ class SequentiallyBootstrappedBaseBagging(BaseBagging, metaclass=ABCMeta):
                 "fit new trees."
             )
             return self
-
+        print("start fitting loop")
         # Parallel loop
         n_jobs, n_estimators, starts = _partition_estimators(
             n_more_estimators, self.n_jobs
@@ -430,6 +434,7 @@ class SequentiallyBootstrappedBaseBagging(BaseBagging, metaclass=ABCMeta):
             )
             for i in range(n_jobs)
         )
+        print("end fitting loop")
 
         # Reduce
         self.estimators_ += list(

@@ -156,6 +156,7 @@ def test_sb_classifier(
         set(sb_clf.timestamp_int_index_mapping.index)
     )
 
+    import IPython; IPython.embed()
     sb_clf.fit(X_train_perfect, y_train)
 
     # X_train index == clf X_train index
