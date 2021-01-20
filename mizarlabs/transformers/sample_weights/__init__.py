@@ -37,20 +37,23 @@ class SampleWeightsByReturns(BaseEstimator, TransformerMixin):
             X, [self._close_column_name, self._event_end_time_column_name]
         )
 
-        indicators_matrix = get_ind_matrix(
+        indicators_matrix, ind_mat_indices = get_ind_matrix(
             samples_info_sets=X[self._event_end_time_column_name],
             price_bars=X,
             event_end_time_column_name=self._event_end_time_column_name,
+            return_indices=True,
         )
 
-        num_concurrent_events = indicators_matrix.sum(axis=0)
+        num_concurrent_events = pd.Series(
+            indicators_matrix.tocsc().sum(axis=1).A1, index=ind_mat_indices
+        ).loc[X.index]
 
         returns = np.log(X[self._close_column_name]).diff()
 
         weights_array = self._calculate_weights(
             convert_to_timestamp(X.index.values),
             convert_to_timestamp(X[self._event_end_time_column_name].values),
-            num_concurrent_events,
+            num_concurrent_events.values,
             returns.values,
         )
 
@@ -83,7 +86,6 @@ class SampleWeightsByReturns(BaseEstimator, TransformerMixin):
         """
         # init weights array
         weights = np.zeros_like(bars_index, dtype=np.float64)
-
         for i in range(len(expiration_barriers)):
             # creating mask between start time and expiration barrier
             mask = np.greater_equal(bars_index, bars_index[i]) * np.less_equal(

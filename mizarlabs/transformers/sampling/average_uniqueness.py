@@ -1,6 +1,6 @@
-import numpy as np
 import pandas as pd
 from mizarlabs.model.bootstrapping import get_ind_matrix
+from mizarlabs.model.bootstrapping import calc_average_uniqueness
 from mizarlabs.static import EVENT_END_TIME
 from mizarlabs.transformers.utils import check_missing_columns
 from sklearn.base import BaseEstimator
@@ -26,18 +26,13 @@ class AverageUniqueness(BaseEstimator, TransformerMixin):
             f"Index should be unique but indices"
             f" {', '.join([str(index) for index in X[X.index.duplicated(keep='last')][:3].index])} are duplicated"
         )
-        ind_mat = get_ind_matrix(
+        ind_mat_csc = get_ind_matrix(
             X.copy()[self._event_end_time_column_name],
             X.copy(),
             self._event_end_time_column_name,
-        )
+        ).tocsc()
 
-        concurrent_events = ind_mat.sum(axis=1)
-
-        uniqueness_matrix = ind_mat / concurrent_events.reshape(-1, 1)
-        uniqueness_matrix[uniqueness_matrix == 0] = None
-        average_uniqueness_array = np.nanmean(uniqueness_matrix, axis=0)
-
+        average_uniqueness_array = calc_average_uniqueness(ind_mat_csc)
         average_uniqueness = pd.Series(average_uniqueness_array, index=X.index)
 
         return average_uniqueness

@@ -1,12 +1,13 @@
 import numpy as np
 import pandas as pd
 import pytest
-from mizarlabs.model.bootstrapping import _bootstrap_loop_run
+from mizarlabs.model.bootstrapping import _calc_update_avg_unique
 from mizarlabs.model.bootstrapping import get_ind_matrix
 from mizarlabs.model.bootstrapping import seq_bootstrap
 from mizarlabs.static import CLOSE
 from mizarlabs.transformers.targets.labeling import EVENT_END_TIME
 from mizarlabs.transformers.targets.labeling import TripleBarrierMethodLabeling
+from scipy import sparse
 
 
 @pytest.mark.usefixtures("dollar_bar_dataframe")
@@ -24,8 +25,8 @@ def test_ind_matrix(dollar_bar_dataframe: pd.DataFrame):
     get_ind_matrix(target_labels[EVENT_END_TIME], dollar_bar_dataframe, EVENT_END_TIME)
 
 
-@pytest.mark.usefixtures("ind_matrix")
-def test_seq_boostrap(ind_matrix: np.array):
+@pytest.mark.usefixtures("ind_matrix_csc")
+def test_seq_boostrap(ind_matrix: sparse.csc_matrix):
     """
     Check the shape of the indicator matrix.
     """
@@ -34,38 +35,24 @@ def test_seq_boostrap(ind_matrix: np.array):
     assert len(bootstrapped_samples) == ind_matrix.shape[1]
 
 
-@pytest.mark.usefixtures("ind_matrix")
-def test_bootstrap_loop_run(ind_matrix: np.array):
+@pytest.mark.usefixtures("ind_matrix_csc")
+def test_calc_average_uniqueness(ind_matrix: sparse.csc_matrix):
     """
     Check the computed average uniqueness.
     """
-    prev_concurrency = np.zeros(ind_matrix.shape[0])
-    avg_uniqueness = np.ones(ind_matrix.shape[1])
-    indices = np.arange(len(avg_uniqueness))
-
-    avg_uniqueness = _bootstrap_loop_run(
-        ind_matrix, prev_concurrency, avg_uniqueness, indices
+    samples_to_update = np.array([0, 2])
+    bootstrapped_samples = np.array([0])
+    avg_uniqueness = _calc_update_avg_unique(
+        ind_matrix, samples_to_update, bootstrapped_samples,
     )
+    assert avg_uniqueness.shape[0] == samples_to_update.shape[0]
+    assert avg_uniqueness[1] == 1
+    assert avg_uniqueness[0] < 1
 
-    np.testing.assert_array_equal(avg_uniqueness, np.array([1.0, 1.0, 1.0, 1.0]))
-
-    prev_concurrency += ind_matrix[:, 0]
-
-    avg_uniqueness = _bootstrap_loop_run(
-        ind_matrix, prev_concurrency, avg_uniqueness, indices
+    samples_to_update = np.array([0, 2])
+    bootstrapped_samples = np.array([0, 0])
+    avg_uniqueness_next = _calc_update_avg_unique(
+        ind_matrix, samples_to_update, bootstrapped_samples,
     )
-    assert avg_uniqueness[0] < avg_uniqueness[1]
-    assert avg_uniqueness[0] < avg_uniqueness[2]
-    assert avg_uniqueness[0] < avg_uniqueness[3]
-    assert np.unique(avg_uniqueness).shape[0] == 2
-
-    prev_concurrency += ind_matrix[:, 2]
-    avg_uniqueness = _bootstrap_loop_run(
-        ind_matrix, prev_concurrency, avg_uniqueness, indices
-    )
-
-    assert avg_uniqueness[0] < avg_uniqueness[1]
-    assert avg_uniqueness[0] < avg_uniqueness[3]
-    assert avg_uniqueness[2] < avg_uniqueness[1]
-    assert avg_uniqueness[2] < avg_uniqueness[3]
-    assert avg_uniqueness[2] == avg_uniqueness[0]
+    assert avg_uniqueness_next[0] < avg_uniqueness[0]
+    assert avg_uniqueness_next[1] == avg_uniqueness[1]
