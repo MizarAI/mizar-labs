@@ -13,6 +13,7 @@ from sklearn.metrics import precision_score
 from sklearn.metrics import roc_auc_score
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import LinearSVC
+from sklearn.tree import DecisionTreeClassifier
 
 
 @pytest.mark.usefixtures("dollar_bar_target_labels", "dollar_bar_dataframe")
@@ -321,3 +322,51 @@ def test_sb_bagging_float_max_samples_warm_start_true(
     )
 
     assert all(sb_clf.predict(X_train_perfect)[:10] == y_train[:10])
+
+
+# NOTE: rename this test if you want a test where you can run a large fake data set to
+# optimise the performance of the classifier
+@pytest.mark.usefixtures(
+    "samples_info_sets", "dollar_bar_dataframe", "X_train_perfect", "y_train"
+)
+def performance_test_sb_bagging(
+    samples_info_sets, dollar_bar_dataframe, X_train_perfect, y_train
+):
+    """
+    Perfomance test of SB Bagging model
+    """
+    n_copies = 100
+    randint_high = 20
+    dollar_bar_dataframe_scaled = pd.concat([dollar_bar_dataframe for _ in range(n_copies)])
+    dollar_bar_dataframe_scaled.index = pd.date_range(dollar_bar_dataframe.index[0], dollar_bar_dataframe.index[-1], periods=dollar_bar_dataframe_scaled.shape[0])
+    samples_info_sets_scaled = pd.Series(
+        [dollar_bar_dataframe_scaled.index[i + np.random.randint(1, randint_high)] for i in range(dollar_bar_dataframe_scaled.shape[0] - randint_high)],
+    )
+    samples_info_sets_scaled.index = dollar_bar_dataframe_scaled.index[:samples_info_sets_scaled.shape[0]]
+    samples_info_sets_scaled.name = "event_end_time"
+    n_features = 10
+    X_train_scaled = pd.DataFrame(np.random.random((samples_info_sets_scaled.shape[0], n_features)), index=samples_info_sets_scaled.index)
+    y_train_scaled = pd.Series(np.random.choice([-1, 1]), index=samples_info_sets_scaled.index)
+
+    clf = DecisionTreeClassifier()
+
+    sb_clf = SequentiallyBootstrappedBaggingClassifier(
+        base_estimator=clf,
+        max_features=n_features,
+        n_estimators=100,
+        samples_info_sets=samples_info_sets_scaled,
+        price_bars=dollar_bar_dataframe_scaled,
+        oob_score=False,
+        random_state=1,
+        bootstrap_features=True,
+        max_samples=0.99,
+        warm_start=True,
+        n_jobs=1,
+        verbose=10,
+        update_probs_every=50,
+    )
+
+    sb_clf.fit(
+        X_train_scaled,
+        y_train_scaled,
+    )

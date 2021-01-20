@@ -17,6 +17,7 @@ def test_sample_weights_by_returns(
     dollar_bar_dataframe,
     dollar_bar_target_labels,
     dollar_bar_ind_matrix,
+    dollar_bar_ind_matrix_indices,
     index_to_check,
 ):
     """Test sample weights by returns calculated values are correct"""
@@ -31,7 +32,10 @@ def test_sample_weights_by_returns(
 
     returns = np.log(df[CLOSE]).diff()
 
-    num_concurrent_events = pd.Series(dollar_bar_ind_matrix.sum(axis=0), index=df.index)
+    num_concurrent_events = pd.Series(
+        dollar_bar_ind_matrix.tocsc().sum(axis=1).A1,
+        index=dollar_bar_ind_matrix_indices
+    ).loc[df.index]
 
     start_time = df.index[index_to_check]
     end_time = df[EVENT_END_TIME].iloc[index_to_check]

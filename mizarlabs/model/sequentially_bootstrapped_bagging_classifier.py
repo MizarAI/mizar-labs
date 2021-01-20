@@ -9,7 +9,7 @@ from warnings import warn
 import numpy as np
 import pandas as pd
 from mizarlabs.transformers.targets.labeling import EVENT_END_TIME
-from scipy.sparse import csc_matrix
+from scipy import sparse
 from sklearn.base import BaseEstimator
 from sklearn.base import ClassifierMixin
 from sklearn.ensemble import BaggingClassifier
@@ -71,6 +71,7 @@ def _generate_bagging_indices(
     max_features: int,
     max_samples: int,
     ind_mat: np.array,
+    update_probs_every: int,
 ) -> Tuple[np.array, np.array]:
     """
     Randomly draw feature and sample indices.
@@ -88,6 +89,9 @@ def _generate_bagging_indices(
     :type max_samples: int
     :param ind_mat: Indicator matrix from triple barrier events
     :type ind_mat: np.array
+    :param update_probs_every: only update the sampling probabilities with average uniqueness after
+                               update_probs_every times, this will speed up training, but at the cost that you
+                               do not sample perfectly according to the average uniqueness
     :return: tuple with two arrays indicating
              the features and samples drawn respectively.
     :rtype: Tuple[np.aray, np.array]
@@ -100,7 +104,7 @@ def _generate_bagging_indices(
         random_state, bootstrap_features, n_features, max_features
     )
     sample_indices = seq_bootstrap(
-        ind_mat, sample_length=max_samples, random_state=random_state
+        ind_mat, sample_length=max_samples, random_state=random_state, update_probs_every=update_probs_every,
     )
 
     return feature_indices, sample_indices
@@ -111,11 +115,12 @@ def _parallel_build_estimators(
     ensemble: BaseBagging,
     X: pd.DataFrame,
     y: pd.Series,
-    ind_mat: np.array,
+    ind_mat: sparse.csc_matrix,
     sample_weight: pd.Series,
     seeds: np.array,
     total_n_estimators: int,
     verbose: int,
+    update_probs_every: int,
 ) -> tuple:
     """
     Private function used to build a batch of estimators within a job.
@@ -128,8 +133,8 @@ def _parallel_build_estimators(
     :type X: pd.DataFrame
     :param y: Series with labels.
     :type y: pd.Series
-    :param ind_mat: Indicator matrix from triple barrier events
-    :type ind_mat: np.array
+    :param ind_mat: indicator matrix from triple barrier events
+    :type ind_mat: sparse.csc_matrix
     :param sample_weight: Series with sample weights.
     :type sample_weight: pd.Series
     :param seeds: Array with seeds for random state.
@@ -138,6 +143,9 @@ def _parallel_build_estimators(
     :type total_n_estimators: int
     :param verbose: Indicating how much to print.
     :type verbose: int
+    :param update_probs_every: only update the sampling probabilities with average uniqueness after
+                               update_probs_every times, this will speed up training, but at the cost that you
+                               do not sample perfectly according to the average uniqueness
     :return: Tuple with estimators, features and the estimator indices
     :rtype: tuple
     """
@@ -174,6 +182,7 @@ def _parallel_build_estimators(
             max_features,
             max_samples,
             ind_mat,
+            update_probs_every,
         )
 
         # Draw samples, using sample weights, and then fit
@@ -219,6 +228,7 @@ class SequentiallyBootstrappedBaseBagging(BaseBagging, metaclass=ABCMeta):
         random_state: Union[int, np.random.RandomState, None] = None,
         verbose: int = 0,
         event_end_time_column_name: str = EVENT_END_TIME,
+        update_probs_every: int = 1,
     ):
         super().__init__(
             base_estimator=base_estimator,
@@ -238,6 +248,7 @@ class SequentiallyBootstrappedBaseBagging(BaseBagging, metaclass=ABCMeta):
         self.samples_info_sets = samples_info_sets
         self.price_bars = price_bars
         self._ind_mat = None
+        self.update_probs_every = update_probs_every
 
         # Used for create get ind_matrix subsample during cross-validation
         self.timestamp_int_index_mapping = pd.Series(
@@ -329,11 +340,11 @@ class SequentiallyBootstrappedBaseBagging(BaseBagging, metaclass=ABCMeta):
         ), "The ind matrix timestamps should have all the timestamps in the training data"
 
         # Generate subsample ind_matrix (we need this during subsampling cross_validation)
-        ind_mat = csc_matrix(self.ind_mat)
+        ind_mat = self.ind_mat.tocsc()
 
         subsampled_ind_mat = ind_mat[
             :, self.timestamp_int_index_mapping.loc[self.X_time_index]
-        ].toarray()
+        ]
 
         # Convert data (X is required to be 2d and indexable)
         X, y = check_X_y(
@@ -427,6 +438,7 @@ class SequentiallyBootstrappedBaseBagging(BaseBagging, metaclass=ABCMeta):
                 seeds[starts[i] : starts[i + 1]],
                 total_n_estimators,
                 verbose=self.verbose,
+                update_probs_every=self.update_probs_every,
             )
             for i in range(n_jobs)
         )
@@ -499,6 +511,10 @@ class SequentiallyBootstrappedBaggingClassifier(
         Controls the verbosity when fitting and predicting.
     :param event_end_time_column_name: str, optional (default=EXPIRATION_BARRIER)
         name of the column with the expiration barrier dates.
+    :param update_probs_every: int, optional (default=1)
+        Only update the sampling probabilities with average uniqueness after
+        update_probs_every times, this will speed up training, but at the cost that you
+        do not sample perfectly according to the average uniqueness
     :ivar base_estimator_: estimator
         The base estimator from which the ensemble is grown.
     :ivar estimators_: list of estimators
@@ -536,6 +552,7 @@ class SequentiallyBootstrappedBaggingClassifier(
         random_state: Union[int, np.random.RandomState, None] = None,
         verbose: int = 0,
         event_end_time_column_name: str = EVENT_END_TIME,
+        update_probs_every: int = 1,
     ):
         super().__init__(
             samples_info_sets=samples_info_sets,
@@ -551,6 +568,7 @@ class SequentiallyBootstrappedBaggingClassifier(
             random_state=random_state,
             verbose=verbose,
             event_end_time_column_name=event_end_time_column_name,
+            update_probs_every=update_probs_every,
         )
 
     def _validate_estimator(self):

@@ -1,6 +1,7 @@
 import datetime
 from pathlib import Path
 
+from scipy import sparse
 import numpy as np
 import pandas as pd
 import pytest
@@ -27,6 +28,7 @@ from sklearn.ensemble import RandomForestClassifier
 from mizarlabs.model.pipeline import StrategySignalPipeline
 from mizarlabs.model.pipeline import MizarFeatureUnion
 from mizarlabs.transformers.microstructural_features.vpin import VPIN
+from typing import List
 
 
 def prepare_cv_object(
@@ -300,6 +302,18 @@ def dollar_bar_ind_matrix(dollar_bar_target_labels: pd.DataFrame) -> np.ndarray:
 
 
 @pytest.fixture
+def dollar_bar_ind_matrix_indices(dollar_bar_target_labels: pd.DataFrame) -> List[pd.Timestamp]:
+    _, dollar_bar_ind_matrix_indices = get_ind_matrix(
+        samples_info_sets=dollar_bar_target_labels[EVENT_END_TIME],
+        price_bars=dollar_bar_target_labels,
+        event_end_time_column_name=EVENT_END_TIME,
+        return_indices=True,
+    )
+
+    return dollar_bar_ind_matrix_indices
+
+
+@pytest.fixture
 def ind_matrix():
     ind_matrix = np.array(
         [
@@ -314,7 +328,12 @@ def ind_matrix():
             [0, 0, 0, 1],
         ]
     )
-    return ind_matrix
+    return sparse.lil_matrix(ind_matrix)
+
+
+@pytest.fixture
+def ind_matrix_csc(ind_matrix):
+    return ind_matrix.tocsc()
 
 
 @pytest.fixture
