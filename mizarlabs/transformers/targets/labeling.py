@@ -94,6 +94,8 @@ class TripleBarrierMethodLabeling(BaseLabeling):
     :type side_column_name: str, optional
     :param volatility_window: The number of bars used for the volatility calculation
     :type volatility_window: int, optional
+    :param expiration_label: Labels with 0 are returned to indicate expiration / vertical barrier has been hit
+    :type expiration_label: bool, optional
     """
 
     def __init__(
@@ -105,6 +107,7 @@ class TripleBarrierMethodLabeling(BaseLabeling):
         close_column_name: str = CLOSE,
         side_column_name: str = SIDE,
         volatility_window: int = 100,
+        expiration_label: bool = False,
     ):
         super().__init__(num_expiration_bars)
         self.profit_taking_factor = profit_taking_factor
@@ -113,6 +116,7 @@ class TripleBarrierMethodLabeling(BaseLabeling):
         self.close_column_name = close_column_name
         self.side_column_name = side_column_name
         self.volatility_window = volatility_window
+        self.expiration_label = expiration_label
         if self.metalabeling:
             assert (
                 self.side_column_name
@@ -170,9 +174,11 @@ class TripleBarrierMethodLabeling(BaseLabeling):
         barriers_info_df[EVENT_END_TIME] = barriers_df.dropna(how="all").min(axis=1)
 
         bins = get_labels(
+            barriers_df,
             barriers_info_df,
             y[self.close_column_name],
             metalabeling=self.metalabeling,
+            expiration_label=self.expiration_label,
         )
 
         barriers_info_df.drop(SIDE, axis=1, inplace=True)
@@ -340,7 +346,11 @@ def get_horizontal_barriers_hit(
 
 
 def get_labels(
-    barriers_info_df: pd.DataFrame, close: pd.Series, metalabeling: bool
+    barriers_df: pd.DataFrame,
+    barriers_info_df: pd.DataFrame,
+    close: pd.Series,
+    metalabeling: bool,
+    expiration_label: bool = False,
 ) -> pd.DataFrame:
     """
     Calculate returns and assign return classes based on the first touched bar.
@@ -348,6 +358,8 @@ def get_labels(
     Case 1: ('side' not in barriers_info_df): bin in (-1,1) <-label by price action
     Case 2: ('side' in barriers_info_df): bin in (0,1) <-label by pnl (meta-labeling)
 
+    :param barriers_df: dataframe with datetime when barriers are hit
+    :type barriers_df: pd.DataFrame
     :param barriers_info_df: Info for creating the barriers
     :type barriers_info_df: pd.DataFrame
     :param close: Series of prices.
@@ -392,11 +404,17 @@ def get_labels(
         output_df.loc[output_df[RETURN] > 0, LABEL] = 1
         output_df.loc[output_df[RETURN] < 0, LABEL] = 0
         output_df.loc[output_df[RETURN] == 0, LABEL] = np.nan
-    else:
         # When metalabeling is not activated then the labels can be 1 or -1.
         # 1 is when the returns are positive and -1 when the returns are
         # negative
+    else:
         output_df[LABEL] = np.sign(output_df[RETURN])
+
+    if expiration_label:
+        expired_events = barriers_df \
+            .loc[events_without_na.index] \
+            .loc[barriers_df.stop_loss.isna() & barriers_df.profit_taking.isna()]
+        output_df.loc[expired_events.index, LABEL] = 0
 
     assert set(output_df.columns) == {RETURN, LABEL}
 
