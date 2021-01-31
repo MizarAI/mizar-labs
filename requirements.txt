@@ -1,5 +1,5 @@
-pandas==1.0.1             # via -r requirements.in
-scikit-learn==0.22.2      # via -r requirements.in, scikit-optimize
-numba==0.48.0             # via -r requirements.in
-ta-lib==0.4.19            # via -r requirements.in
-pytest==5.3.5
+pandas>=1.0.1             # via -r requirements.in
+scikit-learn>=0.22.2      # via -r requirements.in, scikit-optimize
+numba>=0.48.0             # via -r requirements.in
+ta-lib>=0.4.19            # via -r requirements.in
+pytest>=5.3.5
