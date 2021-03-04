@@ -3,6 +3,9 @@ import copy
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.utils.validation import check_is_fitted
+
 from mizarlabs.model.pipeline import StrategySignalPipeline
 from mizarlabs.static import CLOSE
 from mizarlabs.transformers.targets.labeling import LABEL
@@ -11,8 +14,6 @@ from mizarlabs.transformers.technical.moving_average import (
 )
 from mizarlabs.transformers.trading.bet_sizing import BetSizingFromProbabilities
 from mizarlabs.transformers.utils import IdentityTransformer
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.utils.validation import check_is_fitted
 
 
 def test_pipeline_simple_model(dollar_bar_dataframe, dollar_bar_labels_and_info):
@@ -310,11 +311,12 @@ def test_pipeline_predict_metalabeling_with_pred_features(
         y_primary_aligned=manual_y_primary,
         y=dollar_bar_labels_and_info,
     )
-    X_metalabel = pd.concat([manual_X_primary, X_pred_features], axis=1)
-    y_metalabel = y_metalabel.loc[manual_X_primary.index]
+    X_metalabel = pd.concat([manual_X_primary, X_pred_features], axis=1).dropna()
+    y_metalabel = y_metalabel.loc[X_metalabel.index]
     metalabing_model = RandomForestClassifier(random_state=1, n_jobs=-1).fit(
         X_metalabel, y_metalabel
     )
+    manual_X_primary = manual_X_primary.loc[X_metalabel.index]
 
     # manual metalabel predict
     manual_primary_predict = manual_primary_model_fitted.predict(manual_X_primary)
@@ -329,7 +331,6 @@ def test_pipeline_predict_metalabeling_with_pred_features(
         ],
         axis=1,
     )
-
     y_pred_manual = pd.Series(
         metalabing_model.predict(X_metalabel_predict),
         index=X_metalabel.index,
@@ -466,8 +467,8 @@ def test_pipeline_predict_proba_metalabeling_with_pred_features(
         y_primary_aligned=manual_y_primary,
         y=dollar_bar_labels_and_info,
     )
-    X_metalabel = pd.concat([manual_X_primary, X_pred_features], axis=1)
-    y_metalabel = y_metalabel.loc[manual_X_primary.index]
+    X_metalabel = pd.concat([manual_X_primary, X_pred_features], axis=1).dropna()
+    y_metalabel = y_metalabel.loc[X_metalabel.index]
     metalabing_model = RandomForestClassifier(random_state=1, n_jobs=-1).fit(
         X_metalabel, y_metalabel
     )

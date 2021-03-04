@@ -1,5 +1,6 @@
 import pandas as pd
 import pytest
+
 from mizarlabs.static import CLOSE
 from mizarlabs.transformers.sampling.average_uniqueness import AverageUniqueness
 from mizarlabs.transformers.targets.labeling import TripleBarrierMethodLabeling
@@ -19,5 +20,8 @@ def test_average_uniqueness(dollar_bar_dataframe: pd.DataFrame):
 
     avg_uniqueness_transformer = AverageUniqueness()
     avg_uniqueness = avg_uniqueness_transformer.transform(target_labels)
-
     assert avg_uniqueness.iloc[22] == 13 / 36
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])
