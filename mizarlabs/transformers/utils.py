@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
@@ -25,7 +26,7 @@ def convert_to_timestamp(datetime_array: np.ndarray) -> np.ndarray:
     :rtype: np.ndarray
     """
 
-    return datetime_array.astype(np.datetime64).astype(np.int64) // 10 ** 6
+    return datetime_array.astype(int) // 10 ** 6
 
 
 class IdentityTransformer(TransformerMixin, BaseEstimator):

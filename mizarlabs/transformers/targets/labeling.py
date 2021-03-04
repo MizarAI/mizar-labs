@@ -1,8 +1,14 @@
+# -*- coding: utf-8 -*-
 from abc import abstractmethod
 from typing import Tuple
 
 import numpy as np
 import pandas as pd
+from numba import jit
+from numba import prange
+from sklearn.base import BaseEstimator
+from sklearn.base import TransformerMixin
+
 from mizarlabs.static import CLOSE
 from mizarlabs.static import DAILY_VOL
 from mizarlabs.static import EVENT_END_TIME
@@ -14,10 +20,6 @@ from mizarlabs.static import STOP_LOSS
 from mizarlabs.static import TIMESTAMP_UNIT
 from mizarlabs.transformers.utils import check_missing_columns
 from mizarlabs.transformers.utils import convert_to_timestamp
-from numba import jit
-from numba import prange
-from sklearn.base import BaseEstimator
-from sklearn.base import TransformerMixin
 
 __all__ = [
     "BaseLabeling",
@@ -257,9 +259,15 @@ def triple_barrier_labeling(
         profit_taking_barriers.values,
     )
 
-    profit_taking_barriers_timestamps[profit_taking_barriers_timestamps == 0] = np.nan
+    profit_taking_barriers_timestamps = pd.Series(
+        profit_taking_barriers_timestamps,
+        dtype=pd.Int64Dtype(),
+        index=barriers_df.index,
+    ).replace(0, np.nan)
 
-    stop_loss_barriers_timestamps[stop_loss_barriers_timestamps == 0] = np.nan
+    stop_loss_barriers_timestamps = pd.Series(
+        stop_loss_barriers_timestamps, dtype=pd.Int64Dtype(), index=barriers_df.index
+    ).replace(0, np.nan)
 
     barriers_df.loc[:, STOP_LOSS] = pd.to_datetime(
         stop_loss_barriers_timestamps, unit=TIMESTAMP_UNIT
@@ -388,7 +396,7 @@ def get_labels(
         - 1
     )
     returns = (
-        close.loc[events_without_na[EVENT_END_TIME].values].values
+        close.loc[events_without_na[EVENT_END_TIME]].values
         / close.loc[events_without_na.index]
         - 1
     ).rename(RETURN)
@@ -411,9 +419,9 @@ def get_labels(
         output_df[LABEL] = np.sign(output_df[RETURN])
 
     if expiration_label:
-        expired_events = barriers_df \
-            .loc[events_without_na.index] \
-            .loc[barriers_df.stop_loss.isna() & barriers_df.profit_taking.isna()]
+        expired_events = barriers_df.loc[events_without_na.index].loc[
+            barriers_df.stop_loss.isna() & barriers_df.profit_taking.isna()
+        ]
         output_df.loc[expired_events.index, LABEL] = 0
 
     assert set(output_df.columns) == {RETURN, LABEL}
