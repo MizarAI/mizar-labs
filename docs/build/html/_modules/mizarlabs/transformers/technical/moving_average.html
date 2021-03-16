@@ -1,0 +1,242 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mizarlabs.transformers.technical.moving_average &#8212; MizarLabs 0.1.3 documentation</title>
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../../" src="../../../../_static/documentation_options.js"></script>
+    <script src="../../../../_static/jquery.js"></script>
+    <script src="../../../../_static/underscore.js"></script>
+    <script src="../../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for mizarlabs.transformers.technical.moving_average</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">BaseEstimator</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">TransformerMixin</span>
+
+
+<div class="viewcode-block" id="MovingAverageCrossOver"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.moving_average.MovingAverageCrossOver">[docs]</a><span class="k">class</span> <span class="nc">MovingAverageCrossOver</span><span class="p">(</span><span class="n">BaseEstimator</span><span class="p">,</span> <span class="n">TransformerMixin</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Moving average crossover transformer</span>
+
+<span class="sd">    It transform the input data to a 1 when the the fast moving average goes</span>
+<span class="sd">    above the slow moving average and -1 when the slow moving average goes</span>
+<span class="sd">    above the fast moving average. When fill_between_crossovers is true, then</span>
+<span class="sd">    the transfromation will be equal to 1 when the fast moving average is</span>
+<span class="sd">    above the slow one and -1 viceversa.</span>
+
+<span class="sd">    The transformer is specified by the fast and slow moving average</span>
+<span class="sd">    number of bars.</span>
+
+<span class="sd">    :param fast: number of bars to use for the moving average of the fast</span>
+<span class="sd">                 moving average</span>
+<span class="sd">    :type fast: int</span>
+<span class="sd">    :param slow: number of bars to use for the moving average of the slow</span>
+<span class="sd">                  moving average</span>
+<span class="sd">    :type slow: int</span>
+<span class="sd">    :param column_name: The name of the column in input that will be used for the</span>
+<span class="sd">                        transformation.</span>
+<span class="sd">    :type column_name: str</span>
+<span class="sd">    :param fill_between_crossovers: whether or not to fill the crossover value untill</span>
+<span class="sd">                                    the next crossover.</span>
+<span class="sd">    :type fill_between_crossovers: bool</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">fast</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">slow</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">column_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">fill_between_crossovers</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">):</span>
+
+        <span class="k">if</span> <span class="n">fast</span> <span class="o">&gt;</span> <span class="n">slow</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Fast should be smaller than slow&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fast_</span> <span class="o">=</span> <span class="n">fast</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">slow_</span> <span class="o">=</span> <span class="n">slow</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">column_name</span> <span class="o">=</span> <span class="n">column_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fill_between_crossovers</span> <span class="o">=</span> <span class="n">fill_between_crossovers</span>
+
+<div class="viewcode-block" id="MovingAverageCrossOver.fit"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.moving_average.MovingAverageCrossOver.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">fit_params</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="MovingAverageCrossOver.transform"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.moving_average.MovingAverageCrossOver.transform">[docs]</a>    <span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+        <span class="n">fast_moving_average</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">column_name</span><span class="p">]</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">window</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fast_</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+        <span class="n">slow_moving_average</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">column_name</span><span class="p">]</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">window</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">slow_</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+
+        <span class="c1"># filling the zeros with nan so that we can forward fill the nans</span>
+        <span class="c1"># with the previous crossover value</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fill_between_crossovers</span><span class="p">:</span>
+            <span class="n">side</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">X</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">side</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">X</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+
+        <span class="n">side</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_get_down_cross_indices</span><span class="p">(</span>
+                <span class="n">fast_ma</span><span class="o">=</span><span class="n">fast_moving_average</span><span class="p">,</span> <span class="n">slow_ma</span><span class="o">=</span><span class="n">slow_moving_average</span>
+            <span class="p">)</span>
+        <span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="n">side</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_get_up_cross_indices</span><span class="p">(</span>
+                <span class="n">fast_ma</span><span class="o">=</span><span class="n">fast_moving_average</span><span class="p">,</span> <span class="n">slow_ma</span><span class="o">=</span><span class="n">slow_moving_average</span>
+            <span class="p">)</span>
+        <span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+
+        <span class="c1"># forward filling nans with previous crossover values</span>
+        <span class="n">side</span><span class="o">.</span><span class="n">ffill</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="c1"># filling nans at the top of the series with zeros</span>
+        <span class="n">side</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">side</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_get_up_cross_indices</span><span class="p">(</span>
+        <span class="n">fast_ma</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">slow_ma</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DatetimeIndex</span><span class="p">:</span>
+        <span class="c1"># previous value is smaller or equal</span>
+        <span class="n">cond_0</span> <span class="o">=</span> <span class="n">fast_ma</span><span class="o">.</span><span class="n">shift</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">slow_ma</span><span class="o">.</span><span class="n">shift</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="c1"># current value is greater</span>
+        <span class="n">cond_1</span> <span class="o">=</span> <span class="n">fast_ma</span> <span class="o">&gt;</span> <span class="n">slow_ma</span>
+        <span class="k">return</span> <span class="n">fast_ma</span><span class="p">[(</span><span class="n">cond_0</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">cond_1</span><span class="p">)]</span><span class="o">.</span><span class="n">index</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_get_down_cross_indices</span><span class="p">(</span><span class="n">fast_ma</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">slow_ma</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+        <span class="c1"># previous value is greater or equal</span>
+        <span class="n">cond_0</span> <span class="o">=</span> <span class="n">fast_ma</span><span class="o">.</span><span class="n">shift</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">slow_ma</span><span class="o">.</span><span class="n">shift</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="c1"># current value is smaller</span>
+        <span class="n">cond_1</span> <span class="o">=</span> <span class="n">fast_ma</span> <span class="o">&lt;</span> <span class="n">slow_ma</span>
+        <span class="k">return</span> <span class="n">fast_ma</span><span class="p">[(</span><span class="n">cond_0</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">cond_1</span><span class="p">)]</span><span class="o">.</span><span class="n">index</span></div>
+
+
+<div class="viewcode-block" id="MovingAverageCrossOverPredictor"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.moving_average.MovingAverageCrossOverPredictor">[docs]</a><span class="k">class</span> <span class="nc">MovingAverageCrossOverPredictor</span><span class="p">(</span><span class="n">MovingAverageCrossOver</span><span class="p">):</span>
+    <span class="n">classes_</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">]</span>
+    <span class="n">n_classes_</span> <span class="o">=</span> <span class="mi">3</span>
+
+<div class="viewcode-block" id="MovingAverageCrossOverPredictor.predict"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.moving_average.MovingAverageCrossOverPredictor.predict">[docs]</a>    <span class="k">def</span> <span class="nf">predict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">X</span><span class="p">)</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="MovingAverageCrossOverPredictor.predict_proba"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.moving_average.MovingAverageCrossOverPredictor.predict_proba">[docs]</a>    <span class="k">def</span> <span class="nf">predict_proba</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+        <span class="n">predictions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="n">probabilities</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">predictions</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">classes_</span><span class="p">)))</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">class_value</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">classes_</span><span class="p">):</span>
+            <span class="n">probabilities</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">predictions</span> <span class="o">==</span> <span class="n">class_value</span>
+        <span class="k">return</span> <span class="n">probabilities</span></div></div>
+
+
+<div class="viewcode-block" id="ExponentialWeightedMovingAverageDifference"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.moving_average.ExponentialWeightedMovingAverageDifference">[docs]</a><span class="k">class</span> <span class="nc">ExponentialWeightedMovingAverageDifference</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">fast</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">slow</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">column_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">normalised</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="p">):</span>
+
+        <span class="k">if</span> <span class="n">fast</span> <span class="o">&gt;</span> <span class="n">slow</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Fast should be smaller than slow&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fast_</span> <span class="o">=</span> <span class="n">fast</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">slow_</span> <span class="o">=</span> <span class="n">slow</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">normalised</span> <span class="o">=</span> <span class="n">normalised</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">column_name</span> <span class="o">=</span> <span class="n">column_name</span>
+
+<div class="viewcode-block" id="ExponentialWeightedMovingAverageDifference.fit"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.moving_average.ExponentialWeightedMovingAverageDifference.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">fit_params</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="ExponentialWeightedMovingAverageDifference.transform"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.moving_average.ExponentialWeightedMovingAverageDifference.transform">[docs]</a>    <span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="n">fast_ewma</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">column_name</span><span class="p">]</span><span class="o">.</span><span class="n">ewm</span><span class="p">(</span><span class="n">span</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fast_</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+        <span class="n">slow_ewma</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">column_name</span><span class="p">]</span><span class="o">.</span><span class="n">ewm</span><span class="p">(</span><span class="n">span</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">slow_</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+
+        <span class="n">ewma_difference</span> <span class="o">=</span> <span class="n">fast_ewma</span> <span class="o">-</span> <span class="n">slow_ewma</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">normalised</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">(</span><span class="n">ewma_difference</span> <span class="o">/</span> <span class="p">(</span><span class="n">fast_ewma</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+                <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span>
+            <span class="p">)</span>  <span class="c1"># plus one to avoid zero division error</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">ewma_difference</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span></div></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">MizarLabs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, MizarAI.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,1299 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mizarlabs.model.pipeline &#8212; MizarLabs 0.1.3 documentation</title>
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for mizarlabs.model.pipeline</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">copy</span> <span class="kn">import</span> <span class="n">deepcopy</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Dict</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Tuple</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.model.model_selection</span> <span class="kn">import</span> <span class="n">CombPurgedKFoldCV</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">CLOSE</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">EVENT_END_TIME</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">NUMBER_EXPIRATION_BARS_COLUMN</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">PROFIT_TAKING</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">SIDE</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">SIZE</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">STOP_LOSS</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.transformers.targets.labeling</span> <span class="kn">import</span> <span class="n">get_daily_vol</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.transformers.trading.bet_sizing</span> <span class="kn">import</span> <span class="n">BetSizingFromProbabilities</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.transformers.utils</span> <span class="kn">import</span> <span class="n">check_missing_columns</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">BaseEstimator</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">TransformerMixin</span>
+<span class="kn">from</span> <span class="nn">sklearn.pipeline</span> <span class="kn">import</span> <span class="n">FeatureUnion</span>
+<span class="kn">from</span> <span class="nn">sklearn.pipeline</span> <span class="kn">import</span> <span class="n">Pipeline</span>
+<span class="kn">from</span> <span class="nn">sklearn.utils.validation</span> <span class="kn">import</span> <span class="n">check_is_fitted</span>
+<span class="kn">from</span> <span class="nn">sklearn.utils.validation</span> <span class="kn">import</span> <span class="n">check_X_y</span>
+
+
+<div class="viewcode-block" id="MizarFeatureUnion"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.MizarFeatureUnion">[docs]</a><span class="k">class</span> <span class="nc">MizarFeatureUnion</span><span class="p">(</span><span class="n">FeatureUnion</span><span class="p">):</span>
+<div class="viewcode-block" id="MizarFeatureUnion.fit_transform"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.MizarFeatureUnion.fit_transform">[docs]</a>    <span class="k">def</span> <span class="nf">fit_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">fit_params</span><span class="p">):</span>
+        <span class="n">Xs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">fit_params</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">Xs</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">X</span><span class="o">.</span><span class="n">index</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MizarFeatureUnion.transform"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.MizarFeatureUnion.transform">[docs]</a>    <span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
+        <span class="n">Xs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">Xs</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">X</span><span class="o">.</span><span class="n">index</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="MizarPipeline"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.MizarPipeline">[docs]</a><span class="k">class</span> <span class="nc">MizarPipeline</span><span class="p">(</span><span class="n">Pipeline</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Implementation of pipeline that allows sample_weight as a fit argument</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="MizarPipeline.fit"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.MizarPipeline.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">sample_weight</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">fit_params</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">sample_weight</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">fit_params</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">steps</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;__sample_weight&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">sample_weight</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="o">**</span><span class="n">fit_params</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="StrategySignalPipeline"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.StrategySignalPipeline">[docs]</a><span class="k">class</span> <span class="nc">StrategySignalPipeline</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A trading strategy.</span>
+
+<span class="sd">    A trading strategy can include machine learning models or simple technical</span>
+<span class="sd">    indicator transformers. From their outputs the strategy decides whether or</span>
+<span class="sd">    not to take a position and its size.</span>
+
+<span class="sd">    This strategy must have a primary model. A metalabeling model and</span>
+<span class="sd">    a bet sizer are optional.</span>
+
+<span class="sd">    The simplest setting includes only a primary model. In this case the side</span>
+<span class="sd">    is calculated with the predict of the primary model, while the size is</span>
+<span class="sd">    calculated from the predict_proba of the primary model.</span>
+
+<span class="sd">    Adding a bet sizer means that the size is calculated from the bet sizer</span>
+<span class="sd">    and not anymore from the primary model probabilities. The bet sizer</span>
+<span class="sd">    calculates the bet size from the probabilities of the primary model</span>
+<span class="sd">    predictions.</span>
+
+<span class="sd">    When metalabeling model is set then the size comes from the metalabeling</span>
+<span class="sd">    model, unless a bet sizer is set and in this case the bet sizer calculates</span>
+<span class="sd">    the size from the probabilites provided by the metalabeling model</span>
+
+<span class="sd">    :param primary_model: The primary model estimator</span>
+<span class="sd">    :type primary_model: BaseEstimator</span>
+<span class="sd">    :param feature_transformers_primary_model: The feature transformer that</span>
+<span class="sd">                                               transforms the data for the</span>
+<span class="sd">                                               primary model</span>
+<span class="sd">    :type feature_transformers_primary_model: TransformerMixin</span>
+<span class="sd">    :param feature_transformers_metalabeling_model: The feature transformer that</span>
+<span class="sd">                                                    transforms the data for the</span>
+<span class="sd">                                                    metalabeling model</span>
+<span class="sd">    :type feature_transformers_metalabeling_model: TransformerMixin</span>
+<span class="sd">    :param metalabeling_model: The metalabeling model estimator</span>
+<span class="sd">    :type metalabeling_model: BaseEstimator</span>
+<span class="sd">    :param cpcv_num_groups: The number of groups for the combinatorial cross</span>
+<span class="sd">                            validation used for the metalabels calculation</span>
+<span class="sd">    :type cpcv_num_groups: int</span>
+<span class="sd">    :param embargo_td: The number of days to use for the embargo of</span>
+<span class="sd">                       combinatorial cross validation</span>
+<span class="sd">    :type embargo_td: pd.Timedelta</span>
+<span class="sd">    :param metalabeling_use_proba_primary_model: Whether to use probabilities</span>
+<span class="sd">                                                 of the primary model as</span>
+<span class="sd">                                                 features in the metalabeling</span>
+<span class="sd">                                                 model</span>
+<span class="sd">    :type metalabeling_use_proba_primary_model: bool</span>
+<span class="sd">    :param metalabeling_use_predictions_primary_model: Whether to use</span>
+<span class="sd">                                                       predictions of the</span>
+<span class="sd">                                                       primary model as feature</span>
+<span class="sd">                                                       in the metalabeling</span>
+<span class="sd">                                                       model</span>
+<span class="sd">    :param bet_sizer: The transformer to use for the calculation of the bet size</span>
+<span class="sd">    :type bet_sizer: BetSizingFromProbabilities</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">_primary_model_features</span> <span class="o">=</span> <span class="s2">&quot;primary_model_features&quot;</span>
+    <span class="n">_primary_model_predictions</span> <span class="o">=</span> <span class="s2">&quot;primary_model_predictions&quot;</span>
+    <span class="n">_primary_model_proba</span> <span class="o">=</span> <span class="s2">&quot;primary_model_proba&quot;</span>
+    <span class="n">_metalabeling_model_features</span> <span class="o">=</span> <span class="s2">&quot;metalabeling_model_features&quot;</span>
+    <span class="n">_metalabeling_model_predictions</span> <span class="o">=</span> <span class="s2">&quot;metalabeling_model_predictions&quot;</span>
+    <span class="n">_metalabeling_model_proba</span> <span class="o">=</span> <span class="s2">&quot;metalabeling_model_proba&quot;</span>
+    <span class="c1"># TODO: add median to the align methods. The issue is that median does not</span>
+    <span class="c1">#  preserve the type</span>
+    <span class="n">_align_methods</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;mean&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">,</span>
+        <span class="s2">&quot;min&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">,</span>
+        <span class="s2">&quot;max&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">,</span>
+    <span class="p">}</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">primary_model</span><span class="p">:</span> <span class="n">BaseEstimator</span><span class="p">,</span>
+        <span class="n">feature_transformers_primary_model</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span>
+            <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="n">TransformerMixin</span><span class="p">,</span> <span class="kc">None</span><span class="p">]]</span>
+        <span class="p">],</span>
+        <span class="n">feature_transformers_metalabeling_model</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span>
+            <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="n">TransformerMixin</span><span class="p">,</span> <span class="kc">None</span><span class="p">]]</span>
+        <span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">metalabeling_model</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">BaseEstimator</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">cpcv_num_groups</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span>
+        <span class="n">embargo_td</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timedelta</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">metalabeling_use_proba_primary_model</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">metalabeling_use_predictions_primary_model</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">bet_sizer</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">BetSizingFromProbabilities</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">primary_model</span> <span class="o">=</span> <span class="n">primary_model</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">feature_transformers_primary_model</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">feature_transformers_primary_model</span>
+            <span class="k">if</span> <span class="n">feature_transformers_primary_model</span>
+            <span class="k">else</span> <span class="p">{}</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">feature_transformers_metalabeling_model</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">feature_transformers_metalabeling_model</span>
+            <span class="k">if</span> <span class="n">feature_transformers_metalabeling_model</span>
+            <span class="k">else</span> <span class="p">{}</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span> <span class="o">=</span> <span class="n">metalabeling_model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cpcv_num_groups</span> <span class="o">=</span> <span class="n">cpcv_num_groups</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span>
+            <span class="n">embargo_td</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timedelta</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Metalabeling model has been provided, so please enter an &quot;</span>
+                <span class="s2">&quot;embargo_td (pandas.TimeDelta object).&quot;</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cv</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">embargo_td</span> <span class="o">=</span> <span class="n">embargo_td</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_use_proba_primary_model</span> <span class="o">=</span> <span class="n">metalabeling_use_proba_primary_model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_use_predictions_primary_model</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">metalabeling_use_predictions_primary_model</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bet_sizer</span> <span class="o">=</span> <span class="n">bet_sizer</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">downsampled_indices_primary</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">downsampled_indices_metalabeling</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sample_weight_primary</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sample_weight_metalabeling</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span> <span class="nf">_down_sample</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">X_feature_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span>
+        <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+        <span class="n">sample_weight</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">downsampled_indices</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DatetimeIndex</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Downsample X_features, y and sample weight based on the provided</span>
+<span class="sd">        downsampled indices.</span>
+
+<span class="sd">        :param X_feature_dict: dictionary with features for the primary (and</span>
+<span class="sd">                               metalabeling model if set) with keys</span>
+<span class="sd">                               &quot;primary_model_features&quot; and</span>
+<span class="sd">                               &quot;metalabeling_model_features&quot;.</span>
+<span class="sd">        :type X_feature_dict: Dict[str, pd.DataFrame]</span>
+<span class="sd">        :param y: Pandas DataFrame with class labels for the primary model,</span>
+<span class="sd">                  where the index is the start_time of the event and the column</span>
+<span class="sd">                  &quot;event_end_time&quot; indicates when the event has ended.</span>
+<span class="sd">        :type y: pd.DataFrame</span>
+<span class="sd">        :param sample_weight: weights to assign to samples in the dataset during</span>
+<span class="sd">                              fitting, defaults to None</span>
+<span class="sd">        :type sample_weight: pd.Series, optional</span>
+<span class="sd">        :param downsampled_indices: series to indicate which samples have been</span>
+<span class="sd">                                    selected for downsampling, defaults to None</span>
+<span class="sd">        :type downsampled_indices: pd.DatetimeIndex, optional</span>
+<span class="sd">        :return: tuple with down samples features X, labels y and sample</span>
+<span class="sd">                 weights, respectively.</span>
+<span class="sd">        :rtype: Tuple[Dict[str, pd.DataFrame], pd.DataFrame,</span>
+<span class="sd">                      pd.Series]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Getting only the intersected indices between y and the downsampled</span>
+        <span class="c1"># indices. This is necessary because during combinatorial cross</span>
+        <span class="c1"># validation the size of X and y will be reduced and the downsampled</span>
+        <span class="c1"># indices might not be included</span>
+        <span class="n">intersected_downsampled_indices</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span>
+            <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">y</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">downsampled_indices</span><span class="p">)))</span>
+        <span class="p">)</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">intersected_downsampled_indices</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">sample_weight</span><span class="p">:</span>
+            <span class="n">sample_weight</span> <span class="o">=</span> <span class="n">sample_weight</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">intersected_downsampled_indices</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">model_key</span> <span class="ow">in</span> <span class="n">X_feature_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">dataset_key</span> <span class="ow">in</span> <span class="n">X_feature_dict</span><span class="p">[</span><span class="n">model_key</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                <span class="n">X_feature_dict</span><span class="p">[</span><span class="n">model_key</span><span class="p">][</span><span class="n">dataset_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">X_feature_dict</span><span class="p">[</span><span class="n">model_key</span><span class="p">][</span>
+                    <span class="n">dataset_key</span>
+                <span class="p">]</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">intersected_downsampled_indices</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">X_feature_dict</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">sample_weight</span>
+
+    <span class="k">def</span> <span class="nf">_align_on</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">X_features_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Aligns the dataframes with features with the prespecified</span>
+<span class="sd">        leading dataframe with features.</span>
+
+<span class="sd">        :param X_features_dict: dictionary with features for the primary (and</span>
+<span class="sd">                                metalabeling model if set) with keys</span>
+<span class="sd">                                &quot;primary_model_features&quot; and</span>
+<span class="sd">                                &quot;metalabeling_model_features&quot;.</span>
+<span class="sd">        :type X_features_dict: Dict[str, Dict[str, pd.DataFrame]]</span>
+<span class="sd">        :return: dictionary with aligned features for the primary (and</span>
+<span class="sd">                 metalabeling model if set) with keys &quot;primary_model_features&quot;</span>
+<span class="sd">                 and &quot;metalabeling_model_features&quot;.</span>
+<span class="sd">        :rtype: Dict[str, Dict[str, pd.DataFrame]]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">align_on_</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">X_features_dict</span>
+
+        <span class="n">alignment_index</span> <span class="o">=</span> <span class="n">X_features_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_primary_model_features</span><span class="p">][</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">align_on_</span>
+        <span class="p">]</span><span class="o">.</span><span class="n">index</span>
+
+        <span class="k">for</span> <span class="n">model_features_key</span> <span class="ow">in</span> <span class="p">[</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_primary_model_features</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_metalabeling_model_features</span><span class="p">,</span>
+        <span class="p">]:</span>
+            <span class="k">if</span> <span class="n">model_features_key</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="k">for</span> <span class="n">feature_key</span> <span class="ow">in</span> <span class="n">X_features_dict</span><span class="p">[</span><span class="n">model_features_key</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">feature_key</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">align_on_</span><span class="p">:</span>
+
+                    <span class="n">feature_df</span> <span class="o">=</span> <span class="n">X_features_dict</span><span class="p">[</span><span class="n">model_features_key</span><span class="p">][</span><span class="n">feature_key</span><span class="p">]</span>
+
+                    <span class="c1"># -np.inf equivalent of datetime</span>
+                    <span class="n">previous_index</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_datetime</span><span class="p">(</span><span class="s2">&quot;1-1-1700&quot;</span><span class="p">,</span> <span class="n">utc</span><span class="o">=</span><span class="n">feature_df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">tz</span><span class="p">)</span>
+
+                    <span class="n">aligned_feature_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+                        <span class="n">columns</span><span class="o">=</span><span class="n">feature_df</span><span class="o">.</span><span class="n">columns</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">alignment_index</span>
+                    <span class="p">)</span>
+
+                    <span class="n">diff_days_start</span> <span class="o">=</span> <span class="p">(</span><span class="n">feature_df</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">alignment_index</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">days</span>
+
+                    <span class="k">if</span> <span class="p">(</span>
+                        <span class="nb">abs</span><span class="p">(</span><span class="n">diff_days_start</span><span class="p">)</span>
+                        <span class="o">&gt;</span> <span class="p">(</span><span class="n">alignment_index</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">alignment_index</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">days</span> <span class="o">/</span> <span class="mi">10</span>
+                    <span class="p">):</span>
+                        <span class="n">earlier_later</span> <span class="o">=</span> <span class="s2">&quot;later&quot;</span> <span class="k">if</span> <span class="n">diff_days_start</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">&quot;earlier&quot;</span>
+
+                        <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;The start date of the features dataset&quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot; </span><span class="si">{</span><span class="n">feature_key</span><span class="si">}</span><span class="s2"> starts &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="p">(</span><span class="n">alignment_index</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">alignment_index</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">days</span><span class="si">}</span><span class="s2"> &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;days </span><span class="si">{</span><span class="n">earlier_later</span><span class="si">}</span><span class="s2">&quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot; than the alignment data&quot;</span>
+                        <span class="p">)</span>
+
+                    <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">alignment_index</span><span class="p">:</span>
+                        <span class="n">feature_df_subset</span> <span class="o">=</span> <span class="n">feature_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span>
+                            <span class="p">(</span><span class="n">feature_df</span><span class="o">.</span><span class="n">index</span> <span class="o">&gt;</span> <span class="n">previous_index</span><span class="p">)</span>
+                            <span class="o">&amp;</span> <span class="p">(</span><span class="n">feature_df</span><span class="o">.</span><span class="n">index</span> <span class="o">&lt;=</span> <span class="n">index</span><span class="p">)</span>
+                        <span class="p">]</span>
+                        <span class="k">if</span> <span class="n">feature_df_subset</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+                            <span class="k">continue</span>
+
+                        <span class="k">elif</span> <span class="n">feature_df_subset</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                            <span class="n">aligned_feature_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">feature_df_subset</span><span class="o">.</span><span class="n">values</span>
+
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">aligned_feature_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_align_methods</span><span class="p">[</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">align_how_</span><span class="p">[</span><span class="n">feature_key</span><span class="p">]</span>
+                            <span class="p">](</span><span class="n">feature_df_subset</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+                        <span class="n">previous_index</span> <span class="o">=</span> <span class="n">index</span>
+
+                    <span class="n">X_features_dict</span><span class="p">[</span><span class="n">model_features_key</span><span class="p">][</span>
+                        <span class="n">feature_key</span>
+                    <span class="p">]</span> <span class="o">=</span> <span class="n">aligned_feature_df</span><span class="o">.</span><span class="n">ffill</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">X_features_dict</span>
+
+    <span class="c1"># TODO: downsampled_indices should be per model and not global.</span>
+    <span class="c1">#  The pipeline won&#39;t fit well the use case when is composed of</span>
+    <span class="c1">#  a model with sequential information  (e.g. moving averages)</span>
+    <span class="c1">#  and a model that needs the down sampling for (computational or</span>
+    <span class="c1">#  overfitting) (the same should apply for the sample_weight argument)</span>
+<div class="viewcode-block" id="StrategySignalPipeline.fit"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.StrategySignalPipeline.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">X_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span>
+        <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+        <span class="n">label_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;label&quot;</span><span class="p">,</span>
+        <span class="n">sample_weight_primary</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">sample_weight_metalabeling</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">downsampled_indices_primary</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DatetimeIndex</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">downsampled_indices_metalabeling</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DatetimeIndex</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">align_on</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">align_how</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Fit the strategy pipeline</span>
+
+<span class="sd">        :param X_dict: Dictionary containing all the features for the data</span>
+<span class="sd">                       for the primary and metalabeling model. The data can be</span>
+<span class="sd">                       bar and/or tick data</span>
+<span class="sd">        :type X_dict:  Dict[str, pd.DataFrame]</span>
+<span class="sd">        :param y: Pandas DataFrame with class labels for the primary model,</span>
+<span class="sd">                  where the index is the start_time of the event and the column</span>
+<span class="sd">                  &quot;event_end_time&quot; indicates when the event has ended.</span>
+<span class="sd">        :type y: pd.DataFrame</span>
+<span class="sd">        :param label_column_name: The name of the column containing the label</span>
+<span class="sd">        :type label_column_name: str</span>
+<span class="sd">        :param sample_weight_primary: The sample weights for training the primary model</span>
+<span class="sd">        :type sample_weight_primary: pd.Series</span>
+<span class="sd">        :param sample_weight_metalabeling: The sample weights for training the metalabeling model</span>
+<span class="sd">        :type sample_weight_metalabeling: pd.Series</span>
+<span class="sd">        :param downsampled_indices_primary: The indices to use for training the</span>
+<span class="sd">                                            primary model, they should be a subset</span>
+<span class="sd">                                            of the indices in the dataframes</span>
+<span class="sd">        :type downsampled_indices_primary: pd.DatetimeIndex</span>
+<span class="sd">        :param downsampled_indices_metalabeling: The indices to use for training the</span>
+<span class="sd">                                            metalabeling model, they should be a subset</span>
+<span class="sd">                                            of the indices in the dataframes</span>
+<span class="sd">        :type downsampled_indices_metalabeling: pd.DatetimeIndex</span>
+<span class="sd">        :param align_on: The name of the input dataframe we want to align the</span>
+<span class="sd">                         other dataframes to</span>
+<span class="sd">        :type align_on: str</span>
+<span class="sd">        :param align_how: The methodologies to use for alignment of the</span>
+<span class="sd">                          dataframes</span>
+<span class="sd">        :type align_how: Dict[str, str]</span>
+<span class="sd">        :return: The strategy signal pipeline</span>
+<span class="sd">        :rtype: StrategySignalPipeline</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">label_column_name</span><span class="p">]</span><span class="o">.</span><span class="n">dropna</span><span class="p">()))</span><span class="o">.</span><span class="n">issubset</span><span class="p">({</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">})</span>
+
+        <span class="c1"># setting the align_on and align_how variable</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_set_align_on</span><span class="p">(</span><span class="n">X_dict</span><span class="p">,</span> <span class="n">align_on</span><span class="p">,</span> <span class="n">align_how</span><span class="p">)</span>
+
+        <span class="c1"># check if the align_on and align_how variable are set correctly</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_align_on</span><span class="p">(</span><span class="n">X_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">align_on_</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">align_how_</span><span class="p">)</span>
+
+        <span class="c1"># transforming the X_dict using the specified transformers</span>
+        <span class="n">X_features_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">X_dict</span><span class="p">)</span>
+
+        <span class="c1"># Aligning the dictionaries to the data from which the</span>
+        <span class="c1"># target has been constructed</span>
+        <span class="n">X_features_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_align_on</span><span class="p">(</span><span class="n">X_features_dict</span><span class="p">)</span>
+
+        <span class="c1"># if downsample_indices is different than None then</span>
+        <span class="c1"># the attribute downsample_indices is updated with the new value.</span>
+        <span class="c1"># This help to refit the model keeping the information of the</span>
+        <span class="c1"># downsampled indices</span>
+        <span class="k">if</span> <span class="n">downsampled_indices_primary</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">downsampled_indices_primary</span> <span class="o">=</span> <span class="n">downsampled_indices_primary</span>
+        <span class="k">if</span> <span class="n">downsampled_indices_metalabeling</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">downsampled_indices_metalabeling</span> <span class="o">=</span> <span class="n">downsampled_indices_metalabeling</span>
+
+        <span class="c1"># if sample_weight is different than None then the attribute</span>
+        <span class="c1"># sample_weight is updated with the new value.</span>
+        <span class="c1"># This help to refit the model keeping the information of the</span>
+        <span class="c1"># sample weight</span>
+        <span class="k">if</span> <span class="n">sample_weight_primary</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sample_weight_primary</span> <span class="o">=</span> <span class="n">sample_weight_primary</span>
+        <span class="k">if</span> <span class="n">sample_weight_metalabeling</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sample_weight_metalabeling</span> <span class="o">=</span> <span class="n">sample_weight_metalabeling</span>
+
+        <span class="c1"># If downsampled_indices_primary is set2 for the primary model indices</span>
+        <span class="c1"># then we reduced the input data to the selected indices</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">downsampled_indices_primary</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="p">(</span>
+                <span class="n">X_features_dict_primary</span><span class="p">,</span>
+                <span class="n">y_primary</span><span class="p">,</span>
+                <span class="n">sample_weight_primary</span><span class="p">,</span>
+            <span class="p">)</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_down_sample</span><span class="p">(</span>
+                <span class="n">X_features_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_primary_model_features</span><span class="p">],</span>
+                <span class="n">y</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sample_weight_primary</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">downsampled_indices_primary</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">X_features_dict_primary</span><span class="p">,</span> <span class="n">y_primary</span><span class="p">,</span> <span class="n">sample_weight_primary</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">X_features_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_primary_model_features</span><span class="p">],</span>
+                <span class="n">y</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sample_weight_primary</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="c1"># If downsampled_indices_primary is set2 for the metalabeling model indices</span>
+        <span class="c1"># then we reduced the input data to the selected indices</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">downsampled_indices_metalabeling</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="p">(</span>
+                <span class="n">X_features_dict_metalabeling</span><span class="p">,</span>
+                <span class="n">y_metalabeling</span><span class="p">,</span>
+                <span class="n">sample_weight_metalabeling</span><span class="p">,</span>
+            <span class="p">)</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_down_sample</span><span class="p">(</span>
+                <span class="n">X_features_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_metalabeling_model_features</span><span class="p">],</span>
+                <span class="n">y</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sample_weight_metalabeling</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">downsampled_indices_metalabeling</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">X_features_dict_metalabeling</span><span class="p">,</span> <span class="n">y_metalabeling</span><span class="p">,</span> <span class="n">sample_weight_metalabeling</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">X_features_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_metalabeling_model_features</span><span class="p">],</span>
+                <span class="n">y</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sample_weight_metalabeling</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="c1"># align X_dict a dict consisting of dataframes with features and y</span>
+        <span class="p">(</span>
+            <span class="n">X_primary_aligned</span><span class="p">,</span>
+            <span class="n">y_primary_aligned</span><span class="p">,</span>
+            <span class="n">sample_weight_primary_aligned</span><span class="p">,</span>
+        <span class="p">)</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_align_X_dict_and_y</span><span class="p">(</span>
+            <span class="n">X_features_dict_primary</span><span class="p">,</span>
+            <span class="n">y_primary</span><span class="p">[</span><span class="n">label_column_name</span><span class="p">],</span>
+            <span class="n">sample_weight</span><span class="o">=</span><span class="n">sample_weight_primary</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># fit primary model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">primary_model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span>
+            <span class="n">X_primary_aligned</span><span class="p">,</span>
+            <span class="n">y_primary_aligned</span><span class="p">,</span>
+            <span class="n">sample_weight</span><span class="o">=</span><span class="n">sample_weight_primary_aligned</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># If metalabeing exists then we fit it</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_fit_metalabeling_model</span><span class="p">(</span>
+                <span class="n">X_features_dict_metalabeling</span><span class="p">,</span>
+                <span class="n">X_primary_aligned</span><span class="p">,</span>
+                <span class="n">y_metalabeling</span><span class="p">,</span>
+                <span class="n">y_primary_aligned</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+    <span class="k">def</span> <span class="nf">_set_cv</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">y_primary_aligned</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialise the combinatorial cross validation object</span>
+
+<span class="sd">        :param y: Pandas DataFrame with class labels for the primary model, where</span>
+<span class="sd">                  the index is the start_time of the event and the column</span>
+<span class="sd">                  &quot;event_end_time&quot; indicates when the event has ended.</span>
+<span class="sd">        :type y: pd.DataFrame</span>
+<span class="sd">        :param y_primary_aligned: The primary model labels aligned with</span>
+<span class="sd">                                  the features.</span>
+<span class="sd">        :type y_primary_aligned: pd.Series</span>
+<span class="sd">        :return: None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># setting this higher than 1 will result in duplicate cv metalabels</span>
+        <span class="n">cpcv_num_test</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">pred_times</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">y_primary_aligned</span><span class="o">.</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">to_series</span><span class="p">()</span>
+        <span class="n">eval_times</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">y_primary_aligned</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">EVENT_END_TIME</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cv</span> <span class="o">=</span> <span class="n">CombPurgedKFoldCV</span><span class="p">(</span>
+            <span class="n">n_groups</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cpcv_num_groups</span><span class="p">,</span>
+            <span class="n">n_test_splits</span><span class="o">=</span><span class="n">cpcv_num_test</span><span class="p">,</span>
+            <span class="n">pred_times</span><span class="o">=</span><span class="n">pred_times</span><span class="p">,</span>
+            <span class="n">eval_times</span><span class="o">=</span><span class="n">eval_times</span><span class="p">,</span>
+            <span class="n">embargo_td</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">embargo_td</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_pred_proba_features</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">primary_model</span><span class="p">:</span> <span class="n">BaseEstimator</span><span class="p">,</span>
+        <span class="n">X_pred_features</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+        <span class="n">X_val</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+        <span class="n">y_val</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get the probabilities of the primary model predictions to be used in</span>
+<span class="sd">        the metalabeling model as features</span>
+
+<span class="sd">        :param primary_model: The primary model object</span>
+<span class="sd">        :type primary_model: BaseEstimator</span>
+<span class="sd">        :param X_pred_features: DataFrame with predictions from the primary model,</span>
+<span class="sd">                                which will be used as features for the metalabeling</span>
+<span class="sd">                                model.</span>
+<span class="sd">        :type X_pred_features: pd.DataFrame</span>
+<span class="sd">        :param X_val: Features of the primary model used for validation during</span>
+<span class="sd">                      cross validation.</span>
+<span class="sd">        :type X_val: pd.DataFrame</span>
+<span class="sd">        :param y_val: Class labels of the primary used for validation during</span>
+<span class="sd">                      cross validation.</span>
+<span class="sd">        :type y_val: pd.Series</span>
+<span class="sd">        :return: DataFrame with predictions and probabilities from the primary</span>
+<span class="sd">                 model to be used as features in the metalabeling model.</span>
+<span class="sd">        :rtype: pd.DataFrame</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">primary_model</span><span class="p">,</span> <span class="s2">&quot;predict_proba&quot;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">AttributeError</span><span class="p">(</span><span class="s2">&quot;Primary model does not have a predict_proba method.&quot;</span><span class="p">)</span>
+
+        <span class="n">y_pred_proba_val</span> <span class="o">=</span> <span class="n">primary_model</span><span class="o">.</span><span class="n">predict_proba</span><span class="p">(</span><span class="n">X_val</span><span class="p">)</span>
+        <span class="n">pred_proba_cols</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="sa">f</span><span class="s2">&quot;primary_side_pred_proba_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">y_pred_proba_val</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="p">]</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">set</span><span class="p">(</span><span class="n">pred_proba_cols</span><span class="p">)</span><span class="o">.</span><span class="n">issubset</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">X_pred_features</span><span class="o">.</span><span class="n">columns</span><span class="p">)):</span>
+            <span class="n">X_pred_proba</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+                <span class="n">y_pred_proba_val</span><span class="p">,</span>
+                <span class="n">index</span><span class="o">=</span><span class="n">y_val</span><span class="o">.</span><span class="n">index</span><span class="p">,</span>
+                <span class="n">columns</span><span class="o">=</span><span class="p">[</span>
+                    <span class="sa">f</span><span class="s2">&quot;primary_side_pred_proba_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">y_pred_proba_val</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                <span class="p">],</span>
+            <span class="p">)</span>
+            <span class="n">X_pred_features</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">X_pred_features</span><span class="p">,</span> <span class="n">X_pred_proba</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">X_pred_features</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">y_val</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">pred_proba_cols</span><span class="p">]</span> <span class="o">=</span> <span class="n">y_pred_proba_val</span>
+
+        <span class="k">return</span> <span class="n">X_pred_features</span>
+
+    <span class="k">def</span> <span class="nf">_get_pred_features_and_metalabels</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">X_primary_aligned</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+        <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+        <span class="n">y_primary_aligned</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Computes the cross validated predictions and probabilities of primary model</span>
+<span class="sd">        and the cross validated metalabels.</span>
+
+<span class="sd">        The features and the labels will be used to fit the metalabeling model.</span>
+
+<span class="sd">        :param X_primary_aligned: DataFrame with features of the primary model.</span>
+<span class="sd">        :type X_primary_aligned: pd.DataFrame</span>
+<span class="sd">        :param y: Pandas DataFrame with class labels for the primary model, where</span>
+<span class="sd">                  the index is the start_time of the event and the column</span>
+<span class="sd">                  &quot;event_end_time&quot; indicates when the event has ended.</span>
+<span class="sd">        :type y: pd.DataFrame</span>
+<span class="sd">        :param y_primary_aligned: Pandas Series with class labels to fit the primary model,</span>
+<span class="sd">                                  which are aligned with the features in the primary model.</span>
+<span class="sd">        :type y_primary_aligned: pd.Series</span>
+<span class="sd">        :return: Tuple with the predictive features to be used in the metalabeling model,</span>
+<span class="sd">                 and the metalabels, which are used as class labels when fitting the</span>
+<span class="sd">                 metalabeling model.</span>
+<span class="sd">        :rtype: Tuple[pd.DataFrame, pd.Series]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># prepare for cv</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_set_cv</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">y_primary_aligned</span><span class="p">)</span>
+        <span class="n">primary_model_copy</span> <span class="o">=</span> <span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">primary_model</span><span class="p">)</span>
+        <span class="n">y_metalabel</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_use_predictions_primary_model</span><span class="p">:</span>
+            <span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;primary_side_pred&quot;</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">columns</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">X_pred_features</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">columns</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">y_primary_aligned</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+        <span class="c1"># fitting and predicting the primary model on</span>
+        <span class="c1"># the cv splits for the creation of the</span>
+        <span class="c1"># metalabeling labels</span>
+        <span class="k">for</span> <span class="n">train_index</span><span class="p">,</span> <span class="n">val_index</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cv</span><span class="o">.</span><span class="n">split</span><span class="p">(</span>
+            <span class="n">X</span><span class="o">=</span><span class="n">X_primary_aligned</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">y_primary_aligned</span>
+        <span class="p">):</span>
+            <span class="n">X_train</span> <span class="o">=</span> <span class="n">X_primary_aligned</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">train_index</span><span class="p">]</span>
+            <span class="n">y_train</span> <span class="o">=</span> <span class="n">y_primary_aligned</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">train_index</span><span class="p">]</span>
+            <span class="n">X_val</span> <span class="o">=</span> <span class="n">X_primary_aligned</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">val_index</span><span class="p">]</span>
+            <span class="n">y_val</span> <span class="o">=</span> <span class="n">y_primary_aligned</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">val_index</span><span class="p">]</span>
+            <span class="n">primary_model_copy</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_train</span><span class="p">,</span> <span class="n">y_train</span><span class="p">)</span>
+
+            <span class="n">y_pred_val</span> <span class="o">=</span> <span class="n">primary_model_copy</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_val</span><span class="p">)</span>
+            <span class="c1"># create features based on pred and/or pred_proba</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_use_predictions_primary_model</span><span class="p">:</span>
+                <span class="n">X_pred_features</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">y_val</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="s2">&quot;primary_side_pred&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">y_pred_val</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_use_proba_primary_model</span><span class="p">:</span>
+                <span class="n">X_pred_features</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_pred_proba_features</span><span class="p">(</span>
+                    <span class="n">primary_model_copy</span><span class="p">,</span> <span class="n">X_pred_features</span><span class="p">,</span> <span class="n">X_val</span><span class="p">,</span> <span class="n">y_val</span>
+                <span class="p">)</span>
+
+            <span class="c1"># create metalabels of split</span>
+            <span class="n">y_metalabel_cv</span> <span class="o">=</span> <span class="p">(</span><span class="n">y_pred_val</span> <span class="o">==</span> <span class="n">y_val</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">)</span>
+            <span class="n">y_metalabel</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">y_metalabel</span><span class="p">,</span> <span class="n">y_metalabel_cv</span><span class="p">])</span>
+
+        <span class="c1"># sort indices</span>
+        <span class="n">X_pred_features</span><span class="o">.</span><span class="n">sort_index</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">y_metalabel</span><span class="o">.</span><span class="n">sort_index</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_y_metalabel</span><span class="p">(</span><span class="n">y_metalabel</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">X_pred_features</span><span class="p">,</span> <span class="n">y_metalabel</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_check_y_metalabel</span><span class="p">(</span><span class="n">y_metalabel</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Check whether metalabels can be used for training the metalabeling</span>
+<span class="sd">        model.</span>
+
+<span class="sd">        :param y_metalabel: Metalabels calculated from the primary model</span>
+<span class="sd">        :type y_metalabel: pd.Series</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">unique_metalabels</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">y_metalabel</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">unique_metalabels</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">sentence_string</span> <span class="o">=</span> <span class="s2">&quot;incorrect&quot;</span> <span class="k">if</span> <span class="mf">0.0</span> <span class="ow">in</span> <span class="n">unique_metalabels</span> <span class="k">else</span> <span class="s2">&quot;correct&quot;</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;The primary model is always </span><span class="si">{</span><span class="n">sentence_string</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;and so it is not possible to train the &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;metalabeling model&quot;</span>
+            <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_fit_metalabeling_model</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">X_features_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span>
+        <span class="n">X_primary_aligned</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+        <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+        <span class="n">y_primary_aligned</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Fit the metalabeling model</span>
+
+<span class="sd">        :param X_features_dict: Dict containing the transformed features for the</span>
+<span class="sd">                                primary and metalabeling model</span>
+<span class="sd">        :type X_features_dict: Dict[str, pd.DataFrame]</span>
+<span class="sd">        :param X_primary_aligned: DataFrame with features of the primary model.</span>
+<span class="sd">        :type X_primary_aligned: pd.DataFrame</span>
+<span class="sd">        :param y: target with its info not aligned</span>
+<span class="sd">        :type y: pd.DataFrame</span>
+<span class="sd">        :param y_primary_aligned: primary target aligned</span>
+<span class="sd">        :type y_primary_aligned: pd.Series</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># get the predictions from the primary model</span>
+        <span class="n">X_pred_features</span><span class="p">,</span> <span class="n">y_metalabel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_pred_features_and_metalabels</span><span class="p">(</span>
+            <span class="n">X_primary_aligned</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">y_primary_aligned</span>
+        <span class="p">)</span>
+        <span class="n">X_features_dict</span><span class="p">[</span><span class="s2">&quot;primary_prediction_features&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">X_pred_features</span>
+
+        <span class="c1"># align features and sample weight with target</span>
+        <span class="p">(</span>
+            <span class="n">X_metalabel_aligned</span><span class="p">,</span>
+            <span class="n">y_metalabel_aligned</span><span class="p">,</span>
+            <span class="n">sample_weight_metalabel_aligned</span><span class="p">,</span>
+        <span class="p">)</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_align_X_dict_and_y</span><span class="p">(</span><span class="n">X_features_dict</span><span class="p">,</span> <span class="n">y_metalabel</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span>
+            <span class="n">X_metalabel_aligned</span><span class="p">,</span>
+            <span class="n">y_metalabel_aligned</span><span class="p">,</span>
+            <span class="n">sample_weight</span><span class="o">=</span><span class="n">sample_weight_metalabel_aligned</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_align_X_dict_and_y</span><span class="p">(</span>
+        <span class="n">X_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span>
+        <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+        <span class="n">sample_weight</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Align the features in X and the target in y</span>
+
+<span class="sd">        :param X_dict: A dictionary containing features for the primary and</span>
+<span class="sd">                       metalabeling model</span>
+<span class="sd">        :type X_dict: Dict[str, pd.DataFrame]</span>
+<span class="sd">        :param y: The target to which the features need to be aligned with</span>
+<span class="sd">        :type y: pd.Series</span>
+<span class="sd">        :param sample_weight: The sample weights</span>
+<span class="sd">        :type sample_weight: pd.Series</span>
+<span class="sd">        :return: Features, target and sample weights aligned</span>
+<span class="sd">        :rtype: Tuple[pd.DataFrame, pd.Series, pd.Series]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">y_no_nans</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span>
+        <span class="c1"># TODO: will not work with bars with different indices (volume vs dollar for example)</span>
+        <span class="c1"># probably need to use methods from df.index (index search sorted or something)</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">y_no_nans</span><span class="o">.</span><span class="n">index</span><span class="p">]</span> <span class="k">for</span> <span class="n">df</span> <span class="ow">in</span> <span class="n">X_dict</span><span class="o">.</span><span class="n">values</span><span class="p">()],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">X_aligned</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span>
+        <span class="n">y_aligned</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">X_aligned</span><span class="o">.</span><span class="n">index</span><span class="p">]</span>
+        <span class="n">check_X_y</span><span class="p">(</span><span class="n">X_aligned</span><span class="p">,</span> <span class="n">y_aligned</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">sample_weight</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">sample_weight</span> <span class="o">=</span> <span class="n">sample_weight</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">y_aligned</span><span class="o">.</span><span class="n">index</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">X_aligned</span><span class="p">,</span> <span class="n">y_aligned</span><span class="p">,</span> <span class="n">sample_weight</span>
+
+<div class="viewcode-block" id="StrategySignalPipeline.transform"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.StrategySignalPipeline.transform">[docs]</a>    <span class="k">def</span> <span class="nf">transform</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">X_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Runs the feature transformers (if available) on the data.</span>
+
+<span class="sd">        :param X_dict: A dictionary containing features for the primary and</span>
+<span class="sd">                       metalabeling model</span>
+<span class="sd">        :type X_dict: Dict[str, pd.DataFrame]</span>
+<span class="sd">        :return: Dictionary containing the features per each model transformed</span>
+<span class="sd">        :rtype: Dict[str, Dict[str, pd.DataFrame]]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">expected_keys</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">feature_transformers_primary_model</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span>
+            <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">feature_transformers_metalabeling_model</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span>
+        <span class="p">}</span>
+        <span class="k">assert</span> <span class="n">expected_keys</span> <span class="o">==</span> <span class="nb">set</span><span class="p">(</span><span class="n">X_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">()),</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;The keys in X_dict should be exactly the same as the name &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;of the feature generators of the primary (and metalabeling) model. &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Expected </span><span class="si">{</span><span class="n">expected_keys</span><span class="si">}</span><span class="s2">, but got </span><span class="si">{</span><span class="nb">set</span><span class="p">(</span><span class="n">X_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_primary_model_features</span><span class="p">:</span> <span class="p">{</span>
+                <span class="n">name_transformer</span><span class="p">:</span> <span class="n">transformer</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">X_dict</span><span class="p">[</span><span class="n">name_transformer</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">transformer</span>
+                <span class="k">else</span> <span class="n">X_dict</span><span class="p">[</span><span class="n">name_transformer</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">name_transformer</span><span class="p">,</span> <span class="n">transformer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">feature_transformers_primary_model</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="p">},</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_metalabeling_model_features</span><span class="p">:</span> <span class="p">{</span>
+                <span class="n">name_transformer</span><span class="p">:</span> <span class="n">transformer</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">X_dict</span><span class="p">[</span><span class="n">name_transformer</span><span class="p">])</span>
+                <span class="k">if</span> <span class="n">transformer</span>
+                <span class="k">else</span> <span class="n">X_dict</span><span class="p">[</span><span class="n">name_transformer</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">name_transformer</span><span class="p">,</span> <span class="n">transformer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">feature_transformers_metalabeling_model</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="p">},</span>
+        <span class="p">}</span></div>
+
+    <span class="k">def</span> <span class="nf">_set_align_on</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">X_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span>
+        <span class="n">align_on</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">align_how</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Set the alignment variables (align_on_ and align_how) to the pipeline</span>
+<span class="sd">        instance.</span>
+
+<span class="sd">        :param X_dict: Dictionary containing the dataframe for the primary and</span>
+<span class="sd">                       metalabeling model</span>
+<span class="sd">        :type X_dict: Dict[str, pd.DataFrame]</span>
+<span class="sd">        :param align_on: The key of the dataframe that leads the alignment of</span>
+<span class="sd">                         the other dataframes</span>
+<span class="sd">        :type align_on: str</span>
+<span class="sd">        :param align_how: The methods to use for the alignment</span>
+<span class="sd">        :type align_how: Dict[str, str]</span>
+<span class="sd">        :return: None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># If align_on is specified we save it in the object along with</span>
+        <span class="c1"># the align_how dict otherwise we expect to have only one element</span>
+        <span class="c1"># in X_dict key and we save the key in align_on</span>
+        <span class="k">if</span> <span class="n">align_on</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">align_on_</span> <span class="o">=</span> <span class="n">align_on</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">align_how_</span> <span class="o">=</span> <span class="n">align_how</span>
+        <span class="c1"># if self.align_on_ isn&#39;t set and align_on is None and</span>
+        <span class="c1"># X_dict has only one key then we set align_on</span>
+        <span class="c1"># with the first key of the dict</span>
+        <span class="k">elif</span> <span class="p">(</span>
+            <span class="n">align_on</span> <span class="ow">is</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;align_on_&quot;</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">X_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">==</span> <span class="mi">1</span>
+        <span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">align_on_</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">X_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">align_how_</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">elif</span> <span class="n">align_on</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;align_on_&quot;</span><span class="p">):</span>
+            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;align_on_ is already set&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_check_align_on</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">X_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span>
+        <span class="n">align_on</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">align_how</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Checks if align on is set correctly, otherwise raise ValueError</span>
+
+<span class="sd">        :param X_dict: A dictionary containing features for the primary and</span>
+<span class="sd">                       metalabeling model</span>
+<span class="sd">        :type X_dict: Dict[str, pd.DataFrame]</span>
+<span class="sd">        :param align_on: The name of the key in X_dict on which the other</span>
+<span class="sd">                         dataframes will be aligned on.</span>
+<span class="sd">        :return: None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">n_sources</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">X_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+
+        <span class="c1"># Nothing to check, there is only one data source which is assumed to</span>
+        <span class="c1"># be the target datasource</span>
+        <span class="k">if</span> <span class="n">n_sources</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">align_on</span> <span class="ow">and</span> <span class="p">(</span><span class="n">n_sources</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">n_sources</span><span class="si">}</span><span class="s2"> data sources detected, please specify align_on to indicate how to align the features.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">align_on</span> <span class="ow">and</span> <span class="n">align_on</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">X_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Value of align_on </span><span class="si">{</span><span class="n">align_on</span><span class="si">}</span><span class="s2">, should be &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;equal to the one of the keys in X_dict </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="n">X_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">align_on</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">align_how</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;align_how is not specified&quot;</span><span class="p">)</span>
+
+        <span class="c1"># TODO: this message won&#39;t be very readable when align_how has more keys</span>
+        <span class="c1">#  than expected.</span>
+        <span class="k">if</span> <span class="n">align_on</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">X_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">-</span> <span class="p">{</span><span class="n">align_on</span><span class="p">})</span> <span class="o">==</span> <span class="nb">set</span><span class="p">(</span><span class="n">align_how</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;align_how does not have the key/s </span><span class="si">{</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">X_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">-</span> <span class="p">{</span><span class="n">align_on</span><span class="p">})</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="n">align_how</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">align_on</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_align_methods</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="o">.</span><span class="n">issuperset</span><span class="p">(</span>
+            <span class="nb">set</span><span class="p">(</span><span class="n">align_how</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;The method/s </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">align_how</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_align_methods</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span><span class="si">}</span><span class="s2"> is not implemented.&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot; The allowed alignment methods are </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_align_methods</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_features_for_metalabeling_prediction</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">X_primary_aligned</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+        <span class="n">X_features_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create the aligned dataset for the metalabeling model adding the</span>
+<span class="sd">        predictions and probabilities from the primary model</span>
+
+<span class="sd">        :param X_primary_aligned: The dateset aligned for the primary model</span>
+<span class="sd">        :type X_primary_aligned: pd.DataFrame</span>
+<span class="sd">        :param X_features_dict: Dict containing the transformed features for the</span>
+<span class="sd">                                primary and metalabeling model</span>
+<span class="sd">        :type X_features_dict: Dict[str, Dict[str, pd.DataFrame]]</span>
+<span class="sd">        :return: Aligned dataset for the metalabeling model</span>
+<span class="sd">        :rtype: pd.DataFrame</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">X_metalabel_aligned</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">df</span> <span class="k">for</span> <span class="n">df</span> <span class="ow">in</span> <span class="n">X_features_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_metalabeling_model_features</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">()],</span>
+            <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">X_metalabel_aligned</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="c1"># add primary model predict values for metalabel model as features</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_use_predictions_primary_model</span><span class="p">:</span>
+            <span class="n">X_metalabel_aligned</span><span class="p">[</span><span class="s2">&quot;primary_side_pred&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">primary_model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_primary_aligned</span><span class="p">),</span>
+                <span class="n">index</span><span class="o">=</span><span class="n">X_primary_aligned</span><span class="o">.</span><span class="n">index</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="c1"># add primary model predict proba values for metalabel model as features</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_use_proba_primary_model</span><span class="p">:</span>
+            <span class="n">X_primary_proba_features</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">primary_model</span><span class="o">.</span><span class="n">predict_proba</span><span class="p">(</span><span class="n">X_primary_aligned</span><span class="p">),</span>
+                <span class="n">index</span><span class="o">=</span><span class="n">X_primary_aligned</span><span class="o">.</span><span class="n">index</span><span class="p">,</span>
+                <span class="n">columns</span><span class="o">=</span><span class="p">[</span>
+                    <span class="sa">f</span><span class="s2">&quot;primary_side_pred_proba_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">primary_model</span><span class="o">.</span><span class="n">n_classes_</span><span class="p">)</span>
+                <span class="p">],</span>
+            <span class="p">)</span>
+            <span class="c1"># to avoid the creation of unwanted nans the join between the the</span>
+            <span class="c1"># metalabeling aligned and the primary model predictions is inner.</span>
+            <span class="c1"># Without using an inner join nan values will be created when</span>
+            <span class="c1"># the indices of the two dataframe are not the same</span>
+            <span class="n">X_metalabel_aligned</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span>
+                <span class="p">[</span><span class="n">X_metalabel_aligned</span><span class="p">,</span> <span class="n">X_primary_proba_features</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">join</span><span class="o">=</span><span class="s2">&quot;inner&quot;</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">X_metalabel_aligned</span><span class="o">.</span><span class="n">isna</span><span class="p">()</span><span class="o">.</span><span class="n">any</span><span class="p">()</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Nan values in the metalabeling aligned dataset &quot;</span>
+                <span class="s2">&quot;are not allowed. Please check your metalabeling &quot;</span>
+                <span class="s2">&quot;model does not create any nan values when &quot;</span>
+                <span class="s2">&quot;it predicts&quot;</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">X_metalabel_aligned</span>
+
+<div class="viewcode-block" id="StrategySignalPipeline.predict"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.StrategySignalPipeline.predict">[docs]</a>    <span class="k">def</span> <span class="nf">predict</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">X_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Predict the classes for the primary and metalabeling model</span>
+
+<span class="sd">        :param X_dict: A dictionary containing features for the primary and</span>
+<span class="sd">                       meta-labeling model</span>
+<span class="sd">        :type X_dict: Dict[str, pd.DataFrame]</span>
+<span class="sd">        :return: Predicted probabilities for primary and metalabeling model</span>
+<span class="sd">        :rtype: Dict[str, pd.DataFrame]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">check_is_fitted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">primary_model</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span><span class="p">:</span>
+            <span class="n">check_is_fitted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_align_on</span><span class="p">(</span><span class="n">X_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">align_on_</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">align_how_</span><span class="p">)</span>
+
+        <span class="n">target_index</span> <span class="o">=</span> <span class="n">X_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">align_on_</span><span class="p">]</span><span class="o">.</span><span class="n">index</span>
+
+        <span class="k">for</span> <span class="n">df_name</span><span class="p">,</span> <span class="n">df</span> <span class="ow">in</span> <span class="n">X_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">target_index</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;There is no intersection between </span><span class="si">{</span><span class="n">df_name</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">align_on_</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+
+        <span class="n">X_features_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">X_dict</span><span class="p">)</span>
+        <span class="n">X_features_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_align_on</span><span class="p">(</span><span class="n">X_features_dict</span><span class="p">)</span>
+        <span class="n">X_primary_aligned</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">df</span> <span class="k">for</span> <span class="n">df</span> <span class="ow">in</span> <span class="n">X_features_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_primary_model_features</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">()],</span>
+            <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">X_primary_aligned</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># get predictions primary model</span>
+        <span class="n">pred_primary</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">primary_model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_primary_aligned</span><span class="p">),</span> <span class="n">index</span><span class="o">=</span><span class="n">X_primary_aligned</span><span class="o">.</span><span class="n">index</span>
+        <span class="p">)</span>
+        <span class="n">predictions</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_primary_model_predictions</span><span class="p">:</span> <span class="n">pred_primary</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_metalabeling_model_predictions</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">}</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span><span class="p">:</span>
+            <span class="n">X_metalabel_aligned</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_features_for_metalabeling_prediction</span><span class="p">(</span>
+                <span class="n">X_primary_aligned</span><span class="p">,</span> <span class="n">X_features_dict</span>
+            <span class="p">)</span>
+            <span class="n">pred_metalabeling</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_metalabel_aligned</span><span class="p">),</span>
+                <span class="n">index</span><span class="o">=</span><span class="n">X_metalabel_aligned</span><span class="o">.</span><span class="n">index</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">predictions</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_metalabeling_model_predictions</span><span class="p">]</span> <span class="o">=</span> <span class="n">pred_metalabeling</span>
+
+        <span class="k">return</span> <span class="n">predictions</span></div>
+
+<div class="viewcode-block" id="StrategySignalPipeline.predict_proba"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.StrategySignalPipeline.predict_proba">[docs]</a>    <span class="k">def</span> <span class="nf">predict_proba</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Predict the probabilities for the primary and metalabeling model</span>
+
+<span class="sd">        :param X_dict: A dictionary containing features for the primary and</span>
+<span class="sd">                       meta-labeling model</span>
+<span class="sd">        :type X_dict: Dict[str, pd.DataFrame]</span>
+<span class="sd">        :return: Predicted probabilities for primary and metalabeling model</span>
+<span class="sd">        :rtype: Dict[str, pd.DataFrame]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># check if the primary model is fitted</span>
+        <span class="n">check_is_fitted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">primary_model</span><span class="p">)</span>
+
+        <span class="c1"># check align_on and how are set correctly</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_align_on</span><span class="p">(</span><span class="n">X_dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">align_on_</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">align_how_</span><span class="p">)</span>
+
+        <span class="c1"># transforming and aligning X_dict</span>
+        <span class="n">X_features_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">X_dict</span><span class="p">)</span>
+        <span class="n">X_features_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_align_on</span><span class="p">(</span><span class="n">X_features_dict</span><span class="p">)</span>
+
+        <span class="c1"># concatening all the features dataframes in</span>
+        <span class="c1"># one single dataframe that can be used for</span>
+        <span class="c1"># predictions</span>
+        <span class="n">X_primary_aligned</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">df</span> <span class="k">for</span> <span class="n">df</span> <span class="ow">in</span> <span class="n">X_features_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_primary_model_features</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">()],</span>
+            <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">X_primary_aligned</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="c1"># get probabilities from primary model</span>
+        <span class="n">prob_primary_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">primary_model</span><span class="o">.</span><span class="n">predict_proba</span><span class="p">(</span><span class="n">X_primary_aligned</span><span class="p">),</span>
+            <span class="n">index</span><span class="o">=</span><span class="n">X_primary_aligned</span><span class="o">.</span><span class="n">index</span><span class="p">,</span>
+            <span class="n">columns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">primary_model</span><span class="o">.</span><span class="n">classes_</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># creating the probabilities dictionary</span>
+        <span class="c1"># with the probabilites from the primary model</span>
+        <span class="n">probabilities</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_primary_model_proba</span><span class="p">:</span> <span class="n">prob_primary_df</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_metalabeling_model_proba</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">}</span>
+
+        <span class="c1"># if the metalabeling model is present</span>
+        <span class="c1"># then the metalabeling probabilities are</span>
+        <span class="c1"># added to the probabilities dictionary</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span><span class="p">:</span>
+            <span class="n">check_is_fitted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span><span class="p">)</span>
+
+            <span class="c1"># aligning metalabeling model&#39;s features</span>
+            <span class="n">X_metalabel_aligned</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_features_for_metalabeling_prediction</span><span class="p">(</span>
+                <span class="n">X_primary_aligned</span><span class="p">,</span> <span class="n">X_features_dict</span>
+            <span class="p">)</span>
+
+            <span class="c1"># get probabilities from metalabeling model</span>
+            <span class="n">pred_metalabeling</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span><span class="o">.</span><span class="n">predict_proba</span><span class="p">(</span><span class="n">X_metalabel_aligned</span><span class="p">),</span>
+                <span class="n">index</span><span class="o">=</span><span class="n">X_metalabel_aligned</span><span class="o">.</span><span class="n">index</span><span class="p">,</span>
+                <span class="n">columns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span><span class="o">.</span><span class="n">classes_</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="c1"># adding the probabilities to the dictionary</span>
+            <span class="n">probabilities</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_metalabeling_model_proba</span><span class="p">]</span> <span class="o">=</span> <span class="n">pred_metalabeling</span>
+
+        <span class="k">return</span> <span class="n">probabilities</span></div>
+
+<div class="viewcode-block" id="StrategySignalPipeline.get_size"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.StrategySignalPipeline.get_size">[docs]</a>    <span class="k">def</span> <span class="nf">get_size</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Calculate the size of the position</span>
+
+<span class="sd">        :param X_dict: A dictionary containing features for the primary and</span>
+<span class="sd">                       meta-labeling model</span>
+<span class="sd">        :type X_dict: Dict[str, pd.DataFrame]</span>
+<span class="sd">        :return: The sizes of the positions</span>
+<span class="sd">        :rtype: pd.Series</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">predicted_proba_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">predict_proba</span><span class="p">(</span><span class="n">X_dict</span><span class="o">=</span><span class="n">X_dict</span><span class="p">)</span>
+        <span class="n">predicted_proba</span> <span class="o">=</span> <span class="n">predicted_proba_dict</span><span class="p">[</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_metalabeling_model_proba</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span>
+            <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_primary_model_proba</span>
+        <span class="p">]</span>
+
+        <span class="c1"># TODO: how to implement average_active option in bet_sizer</span>
+        <span class="c1"># requires event_end_time_column_name</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bet_sizer</span><span class="p">:</span>
+            <span class="n">pred_and_proba</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+                <span class="n">data</span><span class="o">=</span><span class="p">{</span>
+                    <span class="s2">&quot;prob&quot;</span><span class="p">:</span> <span class="n">predicted_proba</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+                    <span class="s2">&quot;pred&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+                        <span class="p">[</span>
+                            <span class="n">predicted_proba</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">predicted_proba</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+                        <span class="p">]</span>
+                    <span class="p">),</span>
+                <span class="p">},</span>
+                <span class="n">index</span><span class="o">=</span><span class="n">predicted_proba</span><span class="o">.</span><span class="n">index</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span><span class="p">:</span>
+                <span class="n">predicted_side</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_dict</span><span class="o">=</span><span class="n">X_dict</span><span class="p">)[</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_primary_model_predictions</span>
+                <span class="p">]</span>
+                <span class="n">pred_and_proba</span><span class="p">[</span><span class="s2">&quot;side&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">predicted_side</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">bet_sizer</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">pred_and_proba</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling_model</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">predicted_proba</span><span class="p">[</span><span class="mf">1.0</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">predicted_proba</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="StrategySignalPipeline.get_side"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.StrategySignalPipeline.get_side">[docs]</a>    <span class="k">def</span> <span class="nf">get_side</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Calculate the side of the position</span>
+
+<span class="sd">        :param X_dict: A dictionary containing features for the primary and</span>
+<span class="sd">                       meta-labeling model</span>
+<span class="sd">        :type X_dict: Dict[str, pd.DataFrame]</span>
+<span class="sd">        :return: The sides of the positions</span>
+<span class="sd">        :rtype: pd.Series</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">X_dict</span><span class="o">=</span><span class="n">X_dict</span><span class="p">)[</span><span class="bp">self</span><span class="o">.</span><span class="n">_primary_model_predictions</span><span class="p">]</span></div></div>
+
+
+<div class="viewcode-block" id="StrategyTrader"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.StrategyTrader">[docs]</a><span class="k">class</span> <span class="nc">StrategyTrader</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    What is my purpose?</span>
+
+<span class="sd">    Interacts with the data provider,</span>
+<span class="sd">    use the strategy pipeline to make a prediction,</span>
+<span class="sd">    Based on a prediction produces all the information to create a position</span>
+<span class="sd">    (side, size, expiration, profit taking, stop loss)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">strategy_pipeline</span><span class="p">:</span> <span class="n">StrategySignalPipeline</span><span class="p">,</span>
+        <span class="c1"># min number of bars needed to create a prediction</span>
+        <span class="c1"># (take max of the min of primary and meta-labeling model)</span>
+        <span class="n">min_num_bars</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">num_expiration_bars</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>  <span class="c1"># when does trade expire</span>
+        <span class="n">stop_loss_factor</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">profit_taking_factor</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">volatility_window</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="c1"># Check if the strategy pipeline is fitted</span>
+        <span class="n">check_is_fitted</span><span class="p">(</span><span class="n">strategy_pipeline</span><span class="p">,</span> <span class="n">msg</span><span class="o">=</span><span class="s2">&quot;Strategy pipeline should be fitted&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">strategy_pipeline</span> <span class="o">=</span> <span class="n">strategy_pipeline</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">min_num_bars</span> <span class="o">=</span> <span class="n">min_num_bars</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_expiration_bars</span> <span class="o">=</span> <span class="n">num_expiration_bars</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">volatility_window</span> <span class="o">=</span> <span class="n">volatility_window</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop_loss_factor</span> <span class="o">=</span> <span class="n">stop_loss_factor</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">profit_taking_factor</span> <span class="o">=</span> <span class="n">profit_taking_factor</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">strategy_valid</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="c1"># TODO: think about a triple barrier labeling with no</span>
+        <span class="c1">#  volatility adjustment -&gt; check labeling.py</span>
+
+    <span class="k">def</span> <span class="nf">_check_X_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        :param X_dict: A dictionary containing features for the primary and</span>
+<span class="sd">                       meta-labeling model</span>
+<span class="sd">        :type X_dict: Dict[str, pd.DataFrame]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">df_key</span><span class="p">,</span> <span class="n">df</span> <span class="ow">in</span> <span class="n">X_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">is_unique</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;The dataframe </span><span class="si">{</span><span class="n">df_key</span><span class="si">}</span><span class="s2"> has duplicated indices&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_check_signal_has_valid_output</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">signal_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Check whether the signal has valid values</span>
+
+<span class="sd">        :param signal_df: dataframe containing the size and side of the signal</span>
+<span class="sd">        :type signal_df: pd.DataFrame</span>
+<span class="sd">        :return: None</span>
+<span class="sd">        :rtype: None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># checking if output of strategy is what we expect</span>
+        <span class="n">size_unexpected_values</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="ow">not</span> <span class="p">(</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">signal_df</span><span class="p">[</span><span class="n">SIZE</span><span class="p">])</span><span class="o">.</span><span class="n">all</span><span class="p">()</span> <span class="ow">or</span> <span class="ow">not</span> <span class="p">(</span><span class="n">signal_df</span><span class="p">[</span><span class="n">SIZE</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+        <span class="p">)</span>
+        <span class="n">side_unexpected_values</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="ow">not</span> <span class="p">(</span><span class="o">-</span><span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">signal_df</span><span class="p">[</span><span class="n">SIDE</span><span class="p">])</span><span class="o">.</span><span class="n">all</span><span class="p">()</span> <span class="ow">or</span> <span class="ow">not</span> <span class="p">(</span><span class="n">signal_df</span><span class="p">[</span><span class="n">SIDE</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">size_unexpected_values</span> <span class="ow">or</span> <span class="n">side_unexpected_values</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">strategy_valid</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">strategy_valid</span> <span class="o">=</span> <span class="kc">True</span>
+
+<div class="viewcode-block" id="StrategyTrader.create_signal"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.StrategyTrader.create_signal">[docs]</a>    <span class="k">def</span> <span class="nf">create_signal</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create the signal info dataframe (size and side)</span>
+
+<span class="sd">        :param X_dict: A dictionary containing features for the primary and</span>
+<span class="sd">                       meta-labeling model</span>
+<span class="sd">        :type X_dict: Dict[str, pd.DataFrame]</span>
+<span class="sd">        :return: dataframe with size and side</span>
+<span class="sd">        :rtype: pd.DataFrame</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_X_dict</span><span class="p">(</span><span class="n">X_dict</span><span class="p">)</span>
+
+        <span class="c1"># calculating side and size from strategy pipeline</span>
+        <span class="n">signal_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">strategy_pipeline</span><span class="o">.</span><span class="n">get_side</span><span class="p">(</span><span class="n">X_dict</span><span class="p">)</span><span class="o">.</span><span class="n">to_frame</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">SIDE</span><span class="p">)</span>
+        <span class="n">signal_df</span><span class="p">[</span><span class="n">SIZE</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">strategy_pipeline</span><span class="o">.</span><span class="n">get_size</span><span class="p">(</span><span class="n">X_dict</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_signal_has_valid_output</span><span class="p">(</span><span class="n">signal_df</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">signal_df</span></div>
+
+<div class="viewcode-block" id="StrategyTrader.create_strategy_bars"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.StrategyTrader.create_strategy_bars">[docs]</a>    <span class="k">def</span> <span class="nf">create_strategy_bars</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create the dataframe with the strategy bars information (stoploss,</span>
+<span class="sd">        take profit and expiration)</span>
+
+<span class="sd">        :param X_dict: A dictionary containing features for the primary and</span>
+<span class="sd">                       meta-labeling model</span>
+<span class="sd">        :type X_dict: Dict[str, pd.DataFrame]</span>
+<span class="sd">        :return: dataframe with stop loss, taking profit and expiration</span>
+<span class="sd">        :rtype: pd.DataFrame</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_X_dict</span><span class="p">(</span><span class="n">X_dict</span><span class="p">)</span>
+
+        <span class="c1"># target dataframe is extracted so that the volatility can be</span>
+        <span class="c1"># calculated</span>
+        <span class="n">strategy_bars_df</span> <span class="o">=</span> <span class="n">X_dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">strategy_pipeline</span><span class="o">.</span><span class="n">align_on_</span><span class="p">]</span>
+        <span class="n">volatility</span> <span class="o">=</span> <span class="n">get_daily_vol</span><span class="p">(</span><span class="n">strategy_bars_df</span><span class="p">[</span><span class="n">CLOSE</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">volatility_window</span><span class="p">)</span>
+
+        <span class="c1"># adding stop loss and profit taking</span>
+        <span class="n">strategy_bars_df</span><span class="p">[</span><span class="n">STOP_LOSS</span><span class="p">]</span> <span class="o">=</span> <span class="n">volatility</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">stop_loss_factor</span>
+        <span class="n">strategy_bars_df</span><span class="p">[</span><span class="n">PROFIT_TAKING</span><span class="p">]</span> <span class="o">=</span> <span class="n">volatility</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">profit_taking_factor</span>
+
+        <span class="c1"># adding number of expiration bars</span>
+        <span class="n">strategy_bars_df</span><span class="p">[</span><span class="n">NUMBER_EXPIRATION_BARS_COLUMN</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_expiration_bars</span>
+        <span class="k">return</span> <span class="n">strategy_bars_df</span><span class="p">[</span>
+            <span class="p">[</span><span class="n">STOP_LOSS</span><span class="p">,</span> <span class="n">PROFIT_TAKING</span><span class="p">,</span> <span class="n">NUMBER_EXPIRATION_BARS_COLUMN</span><span class="p">]</span>
+        <span class="p">]</span></div>
+
+<div class="viewcode-block" id="StrategyTrader.create_position"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.pipeline.StrategyTrader.create_position">[docs]</a>    <span class="k">def</span> <span class="nf">create_position</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create a dataframe that can be used to evaluate the strategy.</span>
+
+<span class="sd">        The dataframe contains close, stop_loss, profit_taking,</span>
+<span class="sd">        number of expiration bars, posiion size and side.</span>
+
+<span class="sd">        :param X_dict: A dictionary containing features for the primary and</span>
+<span class="sd">                       meta-labeling model</span>
+<span class="sd">        :type X_dict: Dict[str, pd.DataFrame]</span>
+<span class="sd">        :return: The strategy positions and related informations</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># TODO: compare the predictions of the primary with the metalabeling</span>
+
+        <span class="c1"># calculating side and size from strategy pipeline</span>
+        <span class="n">signal_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_signal</span><span class="p">(</span><span class="n">X_dict</span><span class="p">)</span>
+        <span class="n">strategy_bars_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_strategy_bars</span><span class="p">(</span><span class="n">X_dict</span><span class="p">)</span>
+
+        <span class="n">position_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">signal_df</span><span class="p">,</span> <span class="n">strategy_bars_df</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># check all the expected column are in position_df</span>
+        <span class="n">check_missing_columns</span><span class="p">(</span>
+            <span class="n">position_df</span><span class="p">,</span>
+            <span class="p">[</span><span class="n">STOP_LOSS</span><span class="p">,</span> <span class="n">PROFIT_TAKING</span><span class="p">,</span> <span class="n">NUMBER_EXPIRATION_BARS_COLUMN</span><span class="p">,</span> <span class="n">SIZE</span><span class="p">,</span> <span class="n">SIDE</span><span class="p">],</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Checking if position_df has unique indices</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">position_df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">is_unique</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The position dataframe has duplicated indices&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">position_df</span></div></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">MizarLabs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, MizarAI.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

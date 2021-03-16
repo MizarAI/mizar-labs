@@ -1,0 +1,292 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mizarlabs.model.bootstrapping &#8212; MizarLabs 0.1.3 documentation</title>
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for mizarlabs.model.bootstrapping</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">scipy</span> <span class="kn">import</span> <span class="n">sparse</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Tuple</span>
+
+
+<div class="viewcode-block" id="get_ind_matrix"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.bootstrapping.get_ind_matrix">[docs]</a><span class="k">def</span> <span class="nf">get_ind_matrix</span><span class="p">(</span>
+    <span class="n">samples_info_sets</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+    <span class="n">price_bars</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="n">event_end_time_column_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">return_indices</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">sparse</span><span class="o">.</span><span class="n">lil_matrix</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">sparse</span><span class="o">.</span><span class="n">lil_matrix</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timestamp</span><span class="p">]]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Snippet 4.3, page 65, Build an Indicator Matrix</span>
+<span class="sd">    Get indicator matrix. The book implementation uses bar_index as input,</span>
+<span class="sd">    however there is no explanation how to form it. We decided that</span>
+<span class="sd">    using triple_barrier_events and price bars by analogy with concurrency</span>
+<span class="sd">    is the best option.</span>
+
+<span class="sd">    :param samples_info_sets: Series indicating the start and end time of a sample, e.g. from triple barrier</span>
+<span class="sd">    :type samples_info_sets: pd.Series</span>
+<span class="sd">    :param price_bars: Price bars which were used to form triple barrier events or other labelling method</span>
+<span class="sd">    :type price_bars: pd.DataFrame</span>
+<span class="sd">    :param event_end_time_column_name: Column name</span>
+<span class="sd">    :type event_end_time_column_name: str</span>
+<span class="sd">    :return: Indicator binary matrix indicating what (price) bars influence the label for each observation and in</span>
+<span class="sd">             addition in can also return the respective timestamp indices</span>
+<span class="sd">    :rtype: Union[sparse.lil_matrix, Tuple[sparse.lil_matrix, pd.Timestamp]]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="p">(</span>
+        <span class="nb">bool</span><span class="p">(</span><span class="n">samples_info_sets</span><span class="o">.</span><span class="n">isnull</span><span class="p">()</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">any</span><span class="p">())</span> <span class="ow">is</span> <span class="kc">True</span>
+        <span class="ow">or</span> <span class="nb">bool</span><span class="p">(</span><span class="n">samples_info_sets</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">isnull</span><span class="p">()</span><span class="o">.</span><span class="n">any</span><span class="p">())</span> <span class="ow">is</span> <span class="kc">True</span>
+    <span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;NaN values in triple_barrier_events, delete nans&quot;</span><span class="p">)</span>
+
+    <span class="n">triple_barrier_events</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+        <span class="n">samples_info_sets</span>
+    <span class="p">)</span>  <span class="c1"># Convert Series to DataFrame</span>
+    <span class="c1"># Take only period covered in triple_barrier_events</span>
+    <span class="n">trimmed_price_bars_index</span> <span class="o">=</span> <span class="n">price_bars</span><span class="p">[</span>
+        <span class="p">(</span><span class="n">price_bars</span><span class="o">.</span><span class="n">index</span> <span class="o">&gt;=</span> <span class="n">triple_barrier_events</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">min</span><span class="p">())</span>
+        <span class="o">&amp;</span> <span class="p">(</span><span class="n">price_bars</span><span class="o">.</span><span class="n">index</span> <span class="o">&lt;=</span> <span class="n">triple_barrier_events</span><span class="p">[</span><span class="n">event_end_time_column_name</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
+    <span class="p">]</span><span class="o">.</span><span class="n">index</span>
+
+    <span class="n">label_endtime</span> <span class="o">=</span> <span class="n">triple_barrier_events</span><span class="p">[</span><span class="n">event_end_time_column_name</span><span class="p">]</span>
+    <span class="n">bar_index</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span>
+        <span class="nb">list</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="o">*</span><span class="n">triple_barrier_events</span><span class="o">.</span><span class="n">index</span><span class="p">,</span>
+                <span class="o">*</span><span class="n">triple_barrier_events</span><span class="p">[</span><span class="n">event_end_time_column_name</span><span class="p">],</span>
+                <span class="o">*</span><span class="n">trimmed_price_bars_index</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+    <span class="p">)</span>  <span class="c1"># Drop duplicates and sort</span>
+
+    <span class="c1"># Get sorted timestamps with index in sorted array</span>
+    <span class="n">sorted_timestamps</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">bar_index</span><span class="p">),</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">bar_index</span><span class="p">))))</span>
+
+    <span class="n">tokenized_endtimes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">(</span>
+        <span class="p">(</span>
+            <span class="n">label_endtime</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">sorted_timestamps</span><span class="p">),</span>
+            <span class="n">label_endtime</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">sorted_timestamps</span><span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="p">)</span>  <span class="c1"># Create array of arrays: [label_index_position, label_endtime_position]</span>
+    <span class="n">ind_mat</span> <span class="o">=</span> <span class="n">sparse</span><span class="o">.</span><span class="n">lil_matrix</span><span class="p">(</span>
+        <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">bar_index</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">label_endtime</span><span class="p">))</span>
+    <span class="p">)</span>  <span class="c1"># Init indicator matrix</span>
+    <span class="k">for</span> <span class="n">sample_num</span><span class="p">,</span> <span class="p">(</span><span class="n">label_index</span><span class="p">,</span> <span class="n">label_endtime_index</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">tokenized_endtimes</span><span class="p">):</span>
+        <span class="n">ind_mat</span><span class="p">[</span><span class="n">label_index</span> <span class="p">:</span> <span class="n">label_endtime_index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">sample_num</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+
+    <span class="n">ind_mat_csc</span> <span class="o">=</span> <span class="n">ind_mat</span><span class="o">.</span><span class="n">tocsc</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">ind_mat_csc</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
+    <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">ind_mat_csc</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span>
+
+    <span class="k">if</span> <span class="n">return_indices</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">ind_mat</span><span class="p">,</span> <span class="n">bar_index</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">ind_mat</span></div>
+
+
+<div class="viewcode-block" id="calc_average_uniqueness"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.bootstrapping.calc_average_uniqueness">[docs]</a><span class="k">def</span> <span class="nf">calc_average_uniqueness</span><span class="p">(</span><span class="n">ind_mat_csc</span><span class="p">:</span> <span class="n">sparse</span><span class="o">.</span><span class="n">csc_matrix</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Calculates the average uniqueness of an indicator matrix.</span>
+
+<span class="sd">    :param ind_mat_csc: indicator matrix, with size (T x N), where T is no. of timestamps and N the number of samples.</span>
+<span class="sd">    :type ind_mat_csc: sparse.csc_matrix</span>
+<span class="sd">    :return: array with average uniqueness per column in the indicator matrix, where a column represents a sample</span>
+<span class="sd">    :rtype: np.ndarray</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">concurrent_events</span> <span class="o">=</span> <span class="n">ind_mat_csc</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">uniqueness_matrix</span> <span class="o">=</span> <span class="n">ind_mat_csc</span><span class="o">.</span><span class="n">multiply</span><span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="n">concurrent_events</span><span class="p">)</span>
+    <span class="n">counts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">uniqueness_matrix</span><span class="o">.</span><span class="n">tocsc</span><span class="p">()</span><span class="o">.</span><span class="n">indptr</span><span class="p">)</span>
+    <span class="n">sums</span> <span class="o">=</span> <span class="n">uniqueness_matrix</span><span class="o">.</span><span class="n">tocsr</span><span class="p">()</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">A1</span>
+    <span class="n">average_uniqueness_array</span> <span class="o">=</span> <span class="n">sums</span> <span class="o">/</span> <span class="n">counts</span>
+    <span class="k">return</span> <span class="n">average_uniqueness_array</span></div>
+
+
+<span class="k">def</span> <span class="nf">_calc_update_avg_unique</span><span class="p">(</span>
+    <span class="n">ind_mat</span><span class="p">:</span> <span class="n">sparse</span><span class="o">.</span><span class="n">csc_matrix</span><span class="p">,</span>
+    <span class="n">samples_to_update</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">bootstrapped_samples</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Calculates the average uniqueness for a subset of samples if they were to be added to the currently bootstrap</span>
+<span class="sd">    samples.</span>
+
+<span class="sd">    :param ind_mat: indicator matrix, with size (T x N), where T is no. of timestamps and N the number of samples.</span>
+<span class="sd">    :type ind_mat: sparse.csc_matrix</span>
+<span class="sd">    :param samples_to_update: an arrray with indices for the indicator matrix to slice from</span>
+<span class="sd">    :type samples_to_update: np.ndarray</span>
+<span class="sd">    :param bootstrapped_samples: an arrray with indices representing the all the bootstrapped samples</span>
+<span class="sd">    :type bootstrapped_samples: np.ndarray</span>
+<span class="sd">    :return: array with average uniqueness per sample to update</span>
+<span class="sd">    :rtype: np.ndarray</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ind_mat_samples</span> <span class="o">=</span> <span class="n">ind_mat</span><span class="p">[:,</span> <span class="n">samples_to_update</span><span class="p">]</span>
+    <span class="n">partial_conc_events</span> <span class="o">=</span> <span class="n">ind_mat</span><span class="p">[:,</span> <span class="n">bootstrapped_samples</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">non_zero_partial_conc_events_idx</span> <span class="o">=</span> <span class="n">partial_conc_events</span><span class="o">.</span><span class="n">nonzero</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">conc_events_per_sample</span> <span class="o">=</span> <span class="n">ind_mat_samples</span><span class="o">.</span><span class="n">todense</span><span class="p">()</span>
+    <span class="n">conc_events_per_sample</span><span class="p">[</span><span class="n">non_zero_partial_conc_events_idx</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">conc_events_per_sample</span><span class="p">[</span><span class="n">non_zero_partial_conc_events_idx</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="o">+</span> <span class="n">partial_conc_events</span><span class="p">[</span><span class="n">non_zero_partial_conc_events_idx</span><span class="p">]</span>
+    <span class="p">)</span>
+
+    <span class="c1"># NOTE: this type conversion is needed to do division, but is slow</span>
+    <span class="n">conc_events_per_sample</span> <span class="o">=</span> <span class="n">conc_events_per_sample</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">conc_events_per_sample</span><span class="p">[</span><span class="n">non_zero_partial_conc_events_idx</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="mi">1</span> <span class="o">/</span> <span class="n">conc_events_per_sample</span><span class="p">[</span><span class="n">non_zero_partial_conc_events_idx</span><span class="p">]</span>
+    <span class="p">)</span>
+
+    <span class="n">uniqueness_matrix_per_sample</span> <span class="o">=</span> <span class="n">ind_mat_samples</span><span class="o">.</span><span class="n">multiply</span><span class="p">(</span><span class="n">conc_events_per_sample</span><span class="p">)</span>
+    <span class="n">uniqueness_matrix_per_sample_csr</span> <span class="o">=</span> <span class="n">uniqueness_matrix_per_sample</span><span class="o">.</span><span class="n">tocsr</span><span class="p">()</span>
+    <span class="n">uniqueness_sums_per_sample</span> <span class="o">=</span> <span class="n">uniqueness_matrix_per_sample_csr</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">A1</span>
+    <span class="n">counts_per_sample</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">uniqueness_matrix_per_sample_csr</span><span class="o">.</span><span class="n">tocsc</span><span class="p">()</span><span class="o">.</span><span class="n">indptr</span><span class="p">)</span>
+    <span class="n">average_uniqueness_array_per_sample</span> <span class="o">=</span> <span class="n">uniqueness_sums_per_sample</span> <span class="o">/</span> <span class="n">counts_per_sample</span>
+    <span class="k">return</span> <span class="n">average_uniqueness_array_per_sample</span>
+
+
+<div class="viewcode-block" id="seq_bootstrap"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.bootstrapping.seq_bootstrap">[docs]</a><span class="k">def</span> <span class="nf">seq_bootstrap</span><span class="p">(</span>
+    <span class="n">ind_mat</span><span class="p">:</span> <span class="n">sparse</span><span class="o">.</span><span class="n">csc_matrix</span><span class="p">,</span>
+    <span class="n">sample_length</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">random_state</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">update_probs_every</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns a numpy array with tokenized indices of selected samples,</span>
+<span class="sd">    which have been selected by sequential bootstrap procedure.</span>
+
+<span class="sd">    :param ind_mat: indicator matrix from triple barrier events</span>
+<span class="sd">    :type ind_mat: sparse.csc_matrix</span>
+<span class="sd">    :param sample_length: Length of bootstrapped sample, defaults to None</span>
+<span class="sd">    :type sample_length: int, optional</span>
+<span class="sd">    :param random_state: random state, defaults to np.random.RandomState()</span>
+<span class="sd">    :type random_state: np.random.RandomState, optional</span>
+<span class="sd">    :return: numpy array with tokenized indices of selected samples</span>
+<span class="sd">    :rtype: np.array</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">random_state</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">random_state</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">sample_length</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">sample_length</span> <span class="o">=</span> <span class="n">ind_mat</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="n">bootstrapped_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">intp</span><span class="p">)</span>  <span class="c1"># Bootstrapped samples</span>
+
+    <span class="n">avg_unique</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">ind_mat</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">prob</span> <span class="o">=</span> <span class="n">avg_unique</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">avg_unique</span><span class="p">)</span>
+    <span class="n">sample_indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">ind_mat</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">ind_mat</span> <span class="o">=</span> <span class="n">ind_mat</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint32</span><span class="p">)</span>
+    <span class="n">rows_impacted</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">sample_length</span> <span class="o">/</span> <span class="n">update_probs_every</span><span class="p">))):</span>
+        <span class="k">if</span> <span class="n">rows_impacted</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">rows_impacted</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">rows_impacted</span><span class="p">)</span>
+            <span class="n">samples_impacted</span> <span class="o">=</span> <span class="n">ind_mat</span><span class="p">[</span><span class="n">rows_impacted</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">nonzero</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">samples_to_update</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">samples_impacted</span><span class="p">)</span>
+            <span class="n">avg_unique</span><span class="p">[</span><span class="n">samples_to_update</span><span class="p">]</span> <span class="o">=</span> <span class="n">_calc_update_avg_unique</span><span class="p">(</span>
+                <span class="n">ind_mat</span><span class="p">,</span>
+                <span class="n">samples_to_update</span><span class="p">,</span>
+                <span class="n">bootstrapped_samples</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">prob</span> <span class="o">=</span> <span class="n">avg_unique</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">avg_unique</span><span class="p">)</span>  <span class="c1"># Draw prob</span>
+            <span class="n">rows_impacted</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([],</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+
+        <span class="n">choices</span> <span class="o">=</span> <span class="n">random_state</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span>
+            <span class="n">sample_indices</span><span class="p">,</span>
+            <span class="n">p</span><span class="o">=</span><span class="n">prob</span><span class="p">,</span>
+            <span class="n">size</span><span class="o">=</span><span class="nb">min</span><span class="p">(</span><span class="n">sample_length</span> <span class="o">-</span> <span class="n">i</span> <span class="o">*</span> <span class="n">update_probs_every</span><span class="p">,</span> <span class="n">update_probs_every</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="n">bootstrapped_samples</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">bootstrapped_samples</span><span class="p">,</span> <span class="n">choices</span><span class="p">))</span>
+        <span class="n">rows_impacted</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">rows_impacted</span><span class="p">,</span> <span class="n">ind_mat</span><span class="p">[:,</span> <span class="n">choices</span><span class="p">]</span><span class="o">.</span><span class="n">nonzero</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">bootstrapped_samples</span></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">MizarLabs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, MizarAI.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

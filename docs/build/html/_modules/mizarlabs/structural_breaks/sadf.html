@@ -1,0 +1,394 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mizarlabs.structural_breaks.sadf &#8212; MizarLabs 0.1.3 documentation</title>
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for mizarlabs.structural_breaks.sadf</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Explosiveness tests: SADF</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Tuple</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">numba</span> <span class="kn">import</span> <span class="n">jit</span>
+<span class="kn">from</span> <span class="nn">numba</span> <span class="kn">import</span> <span class="n">prange</span>
+
+<span class="kn">from</span> <span class="nn">.sdfc</span> <span class="kn">import</span> <span class="n">get_beta_and_beta_var</span>
+
+
+<div class="viewcode-block" id="SupremumAugmentedDickeyFullerStatTest"><a class="viewcode-back" href="../../../mizarlabs.structural_breaks.html#mizarlabs.structural_breaks.sadf.SupremumAugmentedDickeyFullerStatTest">[docs]</a><span class="k">class</span> <span class="nc">SupremumAugmentedDickeyFullerStatTest</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Implementation of SADF, p. 252-261.</span>
+
+<span class="sd">    SADF fits the ADF regression at each end point t with backwards expanding start points. For the estimation</span>
+<span class="sd">    of SADF(t), the right side of the window is fixed at t. SADF recursively expands the beginning of the sample</span>
+<span class="sd">    up to t - min_length, and returns the sup of this set.</span>
+
+<span class="sd">    When doing with sub- or super-martingale test, the variance of beta of a weak long-run bubble may be smaller than</span>
+<span class="sd">    one of a strong short-run bubble, hence biasing the method towards long-run bubbles. To correct for this bias,</span>
+<span class="sd">    ADF statistic in samples with large lengths can be penalized with the coefficient phi in [0, 1] such that:</span>
+
+<span class="sd">    ADF_penalized = ADF / (t - t0) ^ phi), where t0 is between 1 and t - min_length</span>
+
+<span class="sd">    :param model: model test specification, which can be &#39;no_trend&#39;, &#39;linear&#39;,</span>
+<span class="sd">                  &#39;quadratic&#39;, &#39;sm_poly_1&#39;, &#39;sm_poly_2&#39;, &#39;sm_exp&#39;, &#39;sm_power&#39;</span>
+<span class="sd">    :type model: str</span>
+<span class="sd">    :param lags: either number of lags to use or array of specified lags</span>
+<span class="sd">    :type lags: Union[int, list]</span>
+<span class="sd">    :param min_length: minimum number of observations needed for estimation</span>
+<span class="sd">    :type min_length: int</span>
+<span class="sd">    :param add_constant: flag to add constant, NOTE: sub- and super-martingale tests always</span>
+<span class="sd">                         have a constant.</span>
+<span class="sd">    :type add_constant: bool</span>
+<span class="sd">    :param phi: coefficient to penalize large sample lengths when computing SMT, in [0, 1]</span>
+<span class="sd">    :type phi: float</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">model</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">lags</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">],</span>
+        <span class="n">min_length</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">add_constant</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+        <span class="n">phi</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="k">assert</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">phi</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Expected phi to be between 0 and 1, got </span><span class="si">{</span><span class="n">phi</span><span class="si">}</span><span class="s2">.&quot;</span>
+        <span class="k">assert</span> <span class="p">(</span>
+            <span class="n">min_length</span> <span class="o">&gt;</span> <span class="n">lags</span>
+        <span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;min_length </span><span class="si">{</span><span class="n">min_length</span><span class="si">}</span><span class="s2"> should be higher than lags </span><span class="si">{</span><span class="n">lags</span><span class="si">}</span><span class="s2">.&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lags</span> <span class="o">=</span> <span class="n">lags</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">min_length</span> <span class="o">=</span> <span class="n">min_length</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">add_constant</span> <span class="o">=</span> <span class="n">add_constant</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">phi</span> <span class="o">=</span> <span class="n">phi</span>
+
+<div class="viewcode-block" id="SupremumAugmentedDickeyFullerStatTest.run"><a class="viewcode-back" href="../../../mizarlabs.structural_breaks.html#mizarlabs.structural_breaks.sadf.SupremumAugmentedDickeyFullerStatTest.run">[docs]</a>    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">series_to_test</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Runs the Supremum Augmented Dickey Fuller test and returns a</span>
+<span class="sd">        series with SADF statistics.</span>
+
+<span class="sd">        When the model specification is for sub- and super-martingale</span>
+<span class="sd">        then a series with SMT statistics is returned. See page 260</span>
+<span class="sd">        for additional details.</span>
+
+<span class="sd">        :param series_to_test: series for which SADF statistics are generated</span>
+<span class="sd">        :type series_to_test: pd.Series</span>
+<span class="sd">        :return: series of SADF statistics (or SMT in case of sub- and super-martingale tests)</span>
+<span class="sd">        :rtype: pd.Series</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">_get_X_y</span><span class="p">(</span><span class="n">series_to_test</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">lags</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">add_constant</span><span class="p">)</span>
+        <span class="n">indices</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">min_length</span> <span class="p">:]</span>
+
+        <span class="n">sadf_array</span> <span class="o">=</span> <span class="n">_sadf_outer_loop</span><span class="p">(</span>
+            <span class="n">X</span><span class="o">=</span><span class="n">X</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+            <span class="n">y</span><span class="o">=</span><span class="n">y</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+            <span class="n">min_length</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">min_length</span><span class="p">,</span>
+            <span class="n">model</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">,</span>
+            <span class="n">phi</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">phi</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">sadf_array</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">indices</span><span class="p">)</span></div></div>
+
+
+<span class="nd">@jit</span><span class="p">(</span><span class="n">parallel</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">nopython</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">_get_sadf_at_t</span><span class="p">(</span>
+    <span class="n">X</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">min_length</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">phi</span><span class="p">:</span> <span class="nb">float</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Snippet 17.2, page 258. SADF&#39;s Inner Loop (get SADF value at t)</span>
+
+<span class="sd">    :param X: matrix of lagged values, constants, trend coefficients</span>
+<span class="sd">    :type X: np.ndarray</span>
+<span class="sd">    :param y: y values (either y or y.diff() or np.log(y))</span>
+<span class="sd">    :type y: np.ndarray</span>
+<span class="sd">    :param min_length: minimum number of samples needed for estimation</span>
+<span class="sd">    :type min_length: int</span>
+<span class="sd">    :param model: either &#39;no_trend&#39;, &#39;linear&#39;, &#39;quadratic&#39;, &#39;sm_poly_1&#39;, &#39;sm_poly_2&#39;, &#39;sm_exp&#39;, &#39;sm_power&#39;</span>
+<span class="sd">    :type model: str</span>
+<span class="sd">    :param phi: coefficient to penalize large sample lengths when computing SMT, in [0, 1]</span>
+<span class="sd">    :type phi: float</span>
+<span class="sd">    :return: SADF statistic at time t</span>
+<span class="sd">    :rtype: np.float64</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">adf_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">min_length</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># inner loop starts from 1 to t - tau see page 253</span>
+    <span class="k">for</span> <span class="n">start</span> <span class="ow">in</span> <span class="n">prange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">min_length</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="n">X_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">start</span><span class="p">:])</span>
+        <span class="n">y_</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="n">start</span><span class="p">:])</span>
+
+        <span class="n">b_mean_</span><span class="p">,</span> <span class="n">b_var_</span> <span class="o">=</span> <span class="n">get_beta_and_beta_var</span><span class="p">(</span><span class="n">X_</span><span class="p">,</span> <span class="n">y_</span><span class="p">)</span>
+
+        <span class="n">current_adf</span> <span class="o">=</span> <span class="n">b_mean_</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="n">b_var_</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">**</span> <span class="mf">0.5</span>
+
+        <span class="c1"># if the test specification is a sub- or super-martingale test</span>
+        <span class="c1"># adjust the test statistic as described on page 260.</span>
+        <span class="k">if</span> <span class="n">model</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;sm&quot;</span><span class="p">:</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">t0</span> <span class="o">=</span> <span class="n">start</span> <span class="o">+</span> <span class="mi">1</span>  <span class="c1"># t0 index starts from 1 to t - tau (page 260)</span>
+            <span class="n">current_adf</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">current_adf</span><span class="p">)</span> <span class="o">/</span> <span class="p">((</span><span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="n">t</span> <span class="o">-</span> <span class="n">t0</span><span class="p">))</span> <span class="o">**</span> <span class="n">phi</span><span class="p">)</span>
+
+        <span class="n">adf_array</span><span class="p">[</span><span class="n">start</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_adf</span>
+
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">adf_array</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_get_X_y_standard_specification</span><span class="p">(</span>
+    <span class="n">series</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">lags</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns the matrix with features X and y for the</span>
+<span class="sd">    standard specifcation without constant as described on</span>
+<span class="sd">    page 252.</span>
+
+<span class="sd">    :param series: series to calculated SADF values for.</span>
+<span class="sd">    :type series: pd.Series</span>
+<span class="sd">    :param lags: either number of lags to use or array of specified lags</span>
+<span class="sd">    :type lags: Union[int, list]</span>
+<span class="sd">    :return: matrix with features X and vector y with target values</span>
+<span class="sd">    :rtype: Tuple[pd.DataFrame, pd.Series]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">series_diff</span> <span class="o">=</span> <span class="n">series</span><span class="o">.</span><span class="n">diff</span><span class="p">()</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span>
+    <span class="n">X</span> <span class="o">=</span> <span class="n">_lag_df</span><span class="p">(</span><span class="n">series_diff</span><span class="o">.</span><span class="n">to_frame</span><span class="p">(),</span> <span class="n">lags</span><span class="p">)</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span>
+    <span class="n">X</span><span class="p">[</span><span class="s2">&quot;y_lagged&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">series</span><span class="o">.</span><span class="n">shift</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">X</span><span class="o">.</span><span class="n">index</span><span class="p">]</span>  <span class="c1"># add y_(t-1) column</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">series_diff</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">X</span><span class="o">.</span><span class="n">index</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span>
+
+
+<span class="k">def</span> <span class="nf">_get_X_y</span><span class="p">(</span>
+    <span class="n">series</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">lags</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">],</span> <span class="n">add_const</span><span class="p">:</span> <span class="nb">bool</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Snippet 17.2, page 258-259. Preparing The Datasets</span>
+
+<span class="sd">    :param series: to prepare for test statistics generation (for example log prices)</span>
+<span class="sd">    :type series: pd.Series</span>
+<span class="sd">    :param model: either &#39;no_trend&#39;, &#39;linear&#39;, &#39;quadratic&#39;, &#39;sm_poly_1&#39;, &#39;sm_poly_2&#39;, &#39;sm_exp&#39;, &#39;sm_power&#39;</span>
+<span class="sd">    :type model: str</span>
+<span class="sd">    :param lags: either number of lags to use or array of specified lags</span>
+<span class="sd">    :type lags: Union[int, list]</span>
+<span class="sd">    :param add_const: flag to add constant</span>
+<span class="sd">    :type add_const: bool</span>
+<span class="sd">    :raises ValueError: if unknown model specification is given.</span>
+<span class="sd">    :return: prepared X and y for SADF calculation</span>
+<span class="sd">    :rtype: Tuple[pd.DataFrame, pd.Series]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">add_const</span> <span class="ow">and</span> <span class="n">model</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;sm_poly_1&quot;</span><span class="p">,</span> <span class="s2">&quot;sm_poly_2&quot;</span><span class="p">,</span> <span class="s2">&quot;sm_exp&quot;</span><span class="p">,</span> <span class="s2">&quot;sm_power&quot;</span><span class="p">]:</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Model specification </span><span class="si">{</span><span class="n">model</span><span class="si">}</span><span class="s2"> always has a constant.&quot;</span><span class="p">,</span> <span class="n">category</span><span class="o">=</span><span class="ne">UserWarning</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">model</span> <span class="o">==</span> <span class="s2">&quot;no_trend&quot;</span><span class="p">:</span>
+        <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">_get_X_y_standard_specification</span><span class="p">(</span><span class="n">series</span><span class="p">,</span> <span class="n">lags</span><span class="p">)</span>
+        <span class="n">beta_column</span> <span class="o">=</span> <span class="s2">&quot;y_lagged&quot;</span>
+        <span class="k">if</span> <span class="n">add_const</span><span class="p">:</span>
+            <span class="n">X</span><span class="p">[</span><span class="s2">&quot;const&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="k">elif</span> <span class="n">model</span> <span class="o">==</span> <span class="s2">&quot;linear&quot;</span><span class="p">:</span>
+        <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">_get_X_y_standard_specification</span><span class="p">(</span><span class="n">series</span><span class="p">,</span> <span class="n">lags</span><span class="p">)</span>
+        <span class="n">X</span><span class="p">[</span><span class="s2">&quot;trend&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span>
+            <span class="mi">1</span><span class="p">,</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="p">)</span>  <span class="c1"># Add t to the model (0, 1, 2, 3, 4, 5, .... t)</span>
+        <span class="n">beta_column</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s2">&quot;y_lagged&quot;</span>  <span class="c1"># Column which is used to estimate test beta statistics</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">add_const</span><span class="p">:</span>
+            <span class="n">X</span><span class="p">[</span><span class="s2">&quot;const&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="k">elif</span> <span class="n">model</span> <span class="o">==</span> <span class="s2">&quot;quadratic&quot;</span><span class="p">:</span>
+        <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">_get_X_y_standard_specification</span><span class="p">(</span><span class="n">series</span><span class="p">,</span> <span class="n">lags</span><span class="p">)</span>
+        <span class="n">X</span><span class="p">[</span><span class="s2">&quot;trend&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span>
+            <span class="mi">1</span><span class="p">,</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="p">)</span>  <span class="c1"># Add t to the model (0, 1, 2, 3, 4, 5, .... t)</span>
+        <span class="n">X</span><span class="p">[</span><span class="s2">&quot;quad_trend&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="s2">&quot;trend&quot;</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span>  <span class="c1"># Add t^2 to the model (0, 1, 4, 9, ....)</span>
+        <span class="n">beta_column</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s2">&quot;y_lagged&quot;</span>  <span class="c1"># Column which is used to estimate test beta statistics</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">add_const</span><span class="p">:</span>
+            <span class="n">X</span><span class="p">[</span><span class="s2">&quot;const&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="k">elif</span> <span class="n">model</span> <span class="o">==</span> <span class="s2">&quot;sm_poly_1&quot;</span><span class="p">:</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">series</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">y</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+        <span class="n">X</span><span class="p">[</span><span class="s2">&quot;const&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">X</span><span class="p">[</span><span class="s2">&quot;trend&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">X</span><span class="p">[</span><span class="s2">&quot;quad_trend&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="s2">&quot;trend&quot;</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span>
+        <span class="n">beta_column</span> <span class="o">=</span> <span class="s2">&quot;quad_trend&quot;</span>
+    <span class="k">elif</span> <span class="n">model</span> <span class="o">==</span> <span class="s2">&quot;sm_poly_2&quot;</span><span class="p">:</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">series</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">y</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+        <span class="n">X</span><span class="p">[</span><span class="s2">&quot;const&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">X</span><span class="p">[</span><span class="s2">&quot;trend&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">X</span><span class="p">[</span><span class="s2">&quot;quad_trend&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="s2">&quot;trend&quot;</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span>
+        <span class="n">beta_column</span> <span class="o">=</span> <span class="s2">&quot;quad_trend&quot;</span>
+    <span class="k">elif</span> <span class="n">model</span> <span class="o">==</span> <span class="s2">&quot;sm_exp&quot;</span><span class="p">:</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">series</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">y</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+        <span class="n">X</span><span class="p">[</span><span class="s2">&quot;const&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">X</span><span class="p">[</span><span class="s2">&quot;trend&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">beta_column</span> <span class="o">=</span> <span class="s2">&quot;trend&quot;</span>
+    <span class="k">elif</span> <span class="n">model</span> <span class="o">==</span> <span class="s2">&quot;sm_power&quot;</span><span class="p">:</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">series</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">y</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+        <span class="n">X</span><span class="p">[</span><span class="s2">&quot;const&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">X</span><span class="p">[</span><span class="s2">&quot;log_trend&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="n">beta_column</span> <span class="o">=</span> <span class="s2">&quot;log_trend&quot;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Unknown model&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Move y_lagged column to the front for further extraction</span>
+    <span class="n">columns</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
+    <span class="n">columns</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">columns</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">columns</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">beta_column</span><span class="p">)))</span>
+    <span class="n">X</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="n">columns</span><span class="p">]</span>
+
+    <span class="k">assert</span> <span class="p">(</span>
+        <span class="o">~</span><span class="n">X</span><span class="o">.</span><span class="n">isna</span><span class="p">()</span><span class="o">.</span><span class="n">any</span><span class="p">()</span><span class="o">.</span><span class="n">any</span><span class="p">()</span> <span class="ow">and</span> <span class="o">~</span><span class="n">y</span><span class="o">.</span><span class="n">isna</span><span class="p">()</span><span class="o">.</span><span class="n">any</span><span class="p">()</span><span class="o">.</span><span class="n">any</span><span class="p">()</span>
+    <span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;The constructed X and y contain NaNs based on the model specification </span><span class="si">{</span><span class="n">model</span><span class="si">}</span><span class="s2">.&quot;</span>
+    <span class="k">return</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span>
+
+
+<span class="k">def</span> <span class="nf">_lag_df</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">lags</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Snipet 17.3, page 259. Apply Lags to DataFrame</span>
+
+<span class="sd">    :param df: dataframe with features</span>
+<span class="sd">    :type df: pd.DataFrame</span>
+<span class="sd">    :param lags: either number of lags to use or array of specified lags</span>
+<span class="sd">    :type lags: Union[int, list]</span>
+<span class="sd">    :return: dataframe with features and lagged differenced y features</span>
+<span class="sd">    :rtype: pd.DataFrame</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">df_lagged</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">lags</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="n">lags</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">lags</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">lags</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">lag</span><span class="p">)</span> <span class="k">for</span> <span class="n">lag</span> <span class="ow">in</span> <span class="n">lags</span><span class="p">]</span>
+
+    <span class="k">for</span> <span class="n">lag</span> <span class="ow">in</span> <span class="n">lags</span><span class="p">:</span>
+        <span class="n">temp_df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">shift</span><span class="p">(</span><span class="n">lag</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">deep</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">temp_df</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_diff_lag_&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">lag</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">temp_df</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
+        <span class="n">df_lagged</span> <span class="o">=</span> <span class="n">df_lagged</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">temp_df</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;outer&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">df_lagged</span>
+
+
+<span class="nd">@jit</span><span class="p">(</span><span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nopython</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">_sadf_outer_loop</span><span class="p">(</span>
+    <span class="n">X</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">y</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">min_length</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">,</span>
+    <span class="n">model</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">phi</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Runs the SADF outer loop, i.e for each t in T.</span>
+
+<span class="sd">    :param X: array with features</span>
+<span class="sd">    :type X: np.ndarray</span>
+<span class="sd">    :param y: array with target values</span>
+<span class="sd">    :type y: np.ndarray</span>
+<span class="sd">    :param min_length: minimum number of observations</span>
+<span class="sd">    :type min_length: np.int64</span>
+<span class="sd">    :param model: either &#39;no_trend&#39;, &#39;linear&#39;, &#39;quadratic&#39;, &#39;sm_poly_1&#39;, &#39;sm_poly_2&#39;, &#39;sm_exp&#39;, &#39;sm_power&#39;</span>
+<span class="sd">    :type model: str</span>
+<span class="sd">    :param phi: coefficient to penalize large sample lengths when computing SMT, in [0, 1]</span>
+<span class="sd">    :type phi: np.float64</span>
+<span class="sd">    :return: array with SADF statistics for each point in time t for all T</span>
+<span class="sd">    :rtype: np.ndarray</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">sadf_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">min_length</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">prange</span><span class="p">(</span><span class="n">min_length</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">sadf_array</span><span class="p">[</span><span class="n">index</span> <span class="o">-</span> <span class="n">min_length</span><span class="p">]</span> <span class="o">=</span> <span class="n">_get_sadf_at_t</span><span class="p">(</span>
+            <span class="n">X</span><span class="p">[:</span> <span class="p">(</span><span class="n">index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="p">:],</span> <span class="n">y</span><span class="p">[:</span> <span class="p">(</span><span class="n">index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="p">:],</span> <span class="n">min_length</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">phi</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">sadf_array</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">MizarLabs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, MizarAI.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

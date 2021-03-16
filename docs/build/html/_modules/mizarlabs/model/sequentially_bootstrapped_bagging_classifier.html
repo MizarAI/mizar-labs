@@ -1,0 +1,726 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mizarlabs.model.sequentially_bootstrapped_bagging_classifier &#8212; MizarLabs 0.1.3 documentation</title>
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for mizarlabs.model.sequentially_bootstrapped_bagging_classifier</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">import</span> <span class="nn">numbers</span>
+<span class="kn">from</span> <span class="nn">abc</span> <span class="kn">import</span> <span class="n">ABCMeta</span>
+<span class="kn">from</span> <span class="nn">abc</span> <span class="kn">import</span> <span class="n">abstractmethod</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Tuple</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Union</span>
+<span class="kn">from</span> <span class="nn">warnings</span> <span class="kn">import</span> <span class="n">warn</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.transformers.targets.labeling</span> <span class="kn">import</span> <span class="n">EVENT_END_TIME</span>
+<span class="kn">from</span> <span class="nn">scipy</span> <span class="kn">import</span> <span class="n">sparse</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">BaseEstimator</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">ClassifierMixin</span>
+<span class="kn">from</span> <span class="nn">sklearn.ensemble</span> <span class="kn">import</span> <span class="n">BaggingClassifier</span>
+<span class="kn">from</span> <span class="nn">sklearn.ensemble._bagging</span> <span class="kn">import</span> <span class="n">BaseBagging</span>
+<span class="kn">from</span> <span class="nn">sklearn.ensemble._base</span> <span class="kn">import</span> <span class="n">_partition_estimators</span>
+<span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">accuracy_score</span>
+<span class="kn">from</span> <span class="nn">sklearn.tree</span> <span class="kn">import</span> <span class="n">DecisionTreeClassifier</span>
+<span class="kn">from</span> <span class="nn">sklearn.utils</span> <span class="kn">import</span> <span class="n">check_array</span>
+<span class="kn">from</span> <span class="nn">sklearn.utils</span> <span class="kn">import</span> <span class="n">check_consistent_length</span>
+<span class="kn">from</span> <span class="nn">sklearn.utils</span> <span class="kn">import</span> <span class="n">check_random_state</span>
+<span class="kn">from</span> <span class="nn">sklearn.utils</span> <span class="kn">import</span> <span class="n">check_X_y</span>
+<span class="kn">from</span> <span class="nn">sklearn.utils</span> <span class="kn">import</span> <span class="n">indices_to_mask</span>
+<span class="kn">from</span> <span class="nn">sklearn.utils._joblib</span> <span class="kn">import</span> <span class="n">delayed</span>
+<span class="kn">from</span> <span class="nn">sklearn.utils._joblib</span> <span class="kn">import</span> <span class="n">Parallel</span>
+<span class="kn">from</span> <span class="nn">sklearn.utils.random</span> <span class="kn">import</span> <span class="n">sample_without_replacement</span>
+<span class="kn">from</span> <span class="nn">sklearn.utils.validation</span> <span class="kn">import</span> <span class="n">has_fit_parameter</span>
+
+<span class="kn">from</span> <span class="nn">.bootstrapping</span> <span class="kn">import</span> <span class="n">get_ind_matrix</span>
+<span class="kn">from</span> <span class="nn">.bootstrapping</span> <span class="kn">import</span> <span class="n">seq_bootstrap</span>
+
+<span class="n">MAX_INT</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">iinfo</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span><span class="o">.</span><span class="n">max</span>
+
+
+<span class="k">def</span> <span class="nf">_generate_random_features</span><span class="p">(</span>
+    <span class="n">random_state</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">,</span>
+    <span class="n">bootstrap</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">n_population</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">n_samples</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Draw randomly sampled indices.</span>
+
+<span class="sd">    :param random_state: Random state objecc</span>
+<span class="sd">    :type random_state: np.random.RandomState</span>
+<span class="sd">    :param bootstrap: Boolean indicating whether drawing with or without replacement.</span>
+<span class="sd">    :type bootstrap: bool</span>
+<span class="sd">    :param n_population: The size of the set to sample from.</span>
+<span class="sd">    :type n_population: int</span>
+<span class="sd">    :param n_samples: The number of samples to draw.</span>
+<span class="sd">    :type n_samples: int</span>
+<span class="sd">    :return: array indicating which samples have been drawn.</span>
+<span class="sd">    :rtype: np.array</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Draw sample indices</span>
+    <span class="k">if</span> <span class="n">bootstrap</span><span class="p">:</span>
+        <span class="n">indices</span> <span class="o">=</span> <span class="n">random_state</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">n_population</span><span class="p">,</span> <span class="n">n_samples</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">indices</span> <span class="o">=</span> <span class="n">sample_without_replacement</span><span class="p">(</span>
+            <span class="n">n_population</span><span class="p">,</span> <span class="n">n_samples</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="n">random_state</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">indices</span>
+
+
+<span class="k">def</span> <span class="nf">_generate_bagging_indices</span><span class="p">(</span>
+    <span class="n">random_state</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">,</span>
+    <span class="n">bootstrap_features</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">n_features</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">max_features</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">max_samples</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">ind_mat</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">,</span>
+    <span class="n">update_probs_every</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Randomly draw feature and sample indices.</span>
+
+<span class="sd">    :param random_state: Random state object.</span>
+<span class="sd">    :type random_state: np.random.RandomState</span>
+<span class="sd">    :param bootstrap_features: Boolean indicating whether features</span>
+<span class="sd">                               need to be bootstrapped.</span>
+<span class="sd">    :type bootstrap_features: bool</span>
+<span class="sd">    :param n_features: Number of features to draw.</span>
+<span class="sd">    :type n_features: int</span>
+<span class="sd">    :param max_features: Max number of features available.</span>
+<span class="sd">    :type max_features: int</span>
+<span class="sd">    :param max_samples: Max number of samples to draw.</span>
+<span class="sd">    :type max_samples: int</span>
+<span class="sd">    :param ind_mat: Indicator matrix from triple barrier events</span>
+<span class="sd">    :type ind_mat: np.array</span>
+<span class="sd">    :param update_probs_every: only update the sampling probabilities with average uniqueness after</span>
+<span class="sd">                               update_probs_every times, this will speed up training, but at the cost that you</span>
+<span class="sd">                               do not sample perfectly according to the average uniqueness</span>
+<span class="sd">    :return: tuple with two arrays indicating</span>
+<span class="sd">             the features and samples drawn respectively.</span>
+<span class="sd">    :rtype: Tuple[np.aray, np.array]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Get valid random state</span>
+    <span class="n">random_state</span> <span class="o">=</span> <span class="n">check_random_state</span><span class="p">(</span><span class="n">random_state</span><span class="p">)</span>
+
+    <span class="c1"># Draw indices</span>
+    <span class="n">feature_indices</span> <span class="o">=</span> <span class="n">_generate_random_features</span><span class="p">(</span>
+        <span class="n">random_state</span><span class="p">,</span> <span class="n">bootstrap_features</span><span class="p">,</span> <span class="n">n_features</span><span class="p">,</span> <span class="n">max_features</span>
+    <span class="p">)</span>
+    <span class="n">sample_indices</span> <span class="o">=</span> <span class="n">seq_bootstrap</span><span class="p">(</span>
+        <span class="n">ind_mat</span><span class="p">,</span> <span class="n">sample_length</span><span class="o">=</span><span class="n">max_samples</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="n">random_state</span><span class="p">,</span> <span class="n">update_probs_every</span><span class="o">=</span><span class="n">update_probs_every</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">feature_indices</span><span class="p">,</span> <span class="n">sample_indices</span>
+
+
+<span class="k">def</span> <span class="nf">_parallel_build_estimators</span><span class="p">(</span>
+    <span class="n">n_estimators</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">ensemble</span><span class="p">:</span> <span class="n">BaseBagging</span><span class="p">,</span>
+    <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+    <span class="n">ind_mat</span><span class="p">:</span> <span class="n">sparse</span><span class="o">.</span><span class="n">csc_matrix</span><span class="p">,</span>
+    <span class="n">sample_weight</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+    <span class="n">seeds</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">,</span>
+    <span class="n">total_n_estimators</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">update_probs_every</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Private function used to build a batch of estimators within a job.</span>
+
+<span class="sd">    :param n_estimators: Number of base estimators to build in batch.</span>
+<span class="sd">    :type n_estimators: int</span>
+<span class="sd">    :param ensemble: Ensemble model.</span>
+<span class="sd">    :type ensemble: BaseBagging</span>
+<span class="sd">    :param X: DataFrame with features.</span>
+<span class="sd">    :type X: pd.DataFrame</span>
+<span class="sd">    :param y: Series with labels.</span>
+<span class="sd">    :type y: pd.Series</span>
+<span class="sd">    :param ind_mat: indicator matrix from triple barrier events</span>
+<span class="sd">    :type ind_mat: sparse.csc_matrix</span>
+<span class="sd">    :param sample_weight: Series with sample weights.</span>
+<span class="sd">    :type sample_weight: pd.Series</span>
+<span class="sd">    :param seeds: Array with seeds for random state.</span>
+<span class="sd">    :type seeds: np.array</span>
+<span class="sd">    :param total_n_estimators: Total number of estimators in ensemble.</span>
+<span class="sd">    :type total_n_estimators: int</span>
+<span class="sd">    :param verbose: Indicating how much to print.</span>
+<span class="sd">    :type verbose: int</span>
+<span class="sd">    :param update_probs_every: only update the sampling probabilities with average uniqueness after</span>
+<span class="sd">                               update_probs_every times, this will speed up training, but at the cost that you</span>
+<span class="sd">                               do not sample perfectly according to the average uniqueness</span>
+<span class="sd">    :return: Tuple with estimators, features and the estimator indices</span>
+<span class="sd">    :rtype: tuple</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Retrieve settings</span>
+    <span class="n">n_samples</span><span class="p">,</span> <span class="n">n_features</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">max_features</span> <span class="o">=</span> <span class="n">ensemble</span><span class="o">.</span><span class="n">_max_features</span>
+    <span class="n">max_samples</span> <span class="o">=</span> <span class="n">ensemble</span><span class="o">.</span><span class="n">_max_samples</span>
+    <span class="n">bootstrap_features</span> <span class="o">=</span> <span class="n">ensemble</span><span class="o">.</span><span class="n">bootstrap_features</span>
+    <span class="n">support_sample_weight</span> <span class="o">=</span> <span class="n">has_fit_parameter</span><span class="p">(</span><span class="n">ensemble</span><span class="o">.</span><span class="n">base_estimator_</span><span class="p">,</span> <span class="s2">&quot;sample_weight&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">support_sample_weight</span> <span class="ow">and</span> <span class="n">sample_weight</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The base estimator doesn&#39;t support sample weight&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Build estimators</span>
+    <span class="n">estimators</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">estimators_features</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">estimators_indices</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_estimators</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">verbose</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="s2">&quot;Building estimator </span><span class="si">%d</span><span class="s2"> of </span><span class="si">%d</span><span class="s2"> for this parallel run &quot;</span>
+                <span class="s2">&quot;(total </span><span class="si">%d</span><span class="s2">)...&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">n_estimators</span><span class="p">,</span> <span class="n">total_n_estimators</span><span class="p">)</span>
+            <span class="p">)</span>
+
+        <span class="n">random_state</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">(</span><span class="n">seeds</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">estimator</span> <span class="o">=</span> <span class="n">ensemble</span><span class="o">.</span><span class="n">_make_estimator</span><span class="p">(</span><span class="n">append</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="n">random_state</span><span class="p">)</span>
+
+        <span class="c1"># Draw random feature, sample indices</span>
+        <span class="n">features</span><span class="p">,</span> <span class="n">indices</span> <span class="o">=</span> <span class="n">_generate_bagging_indices</span><span class="p">(</span>
+            <span class="n">random_state</span><span class="p">,</span>
+            <span class="n">bootstrap_features</span><span class="p">,</span>
+            <span class="n">n_features</span><span class="p">,</span>
+            <span class="n">max_features</span><span class="p">,</span>
+            <span class="n">max_samples</span><span class="p">,</span>
+            <span class="n">ind_mat</span><span class="p">,</span>
+            <span class="n">update_probs_every</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Draw samples, using sample weights, and then fit</span>
+        <span class="k">if</span> <span class="n">support_sample_weight</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">sample_weight</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">curr_sample_weight</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">n_samples</span><span class="p">,))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">curr_sample_weight</span> <span class="o">=</span> <span class="n">sample_weight</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+            <span class="n">sample_counts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">bincount</span><span class="p">(</span><span class="n">indices</span><span class="p">,</span> <span class="n">minlength</span><span class="o">=</span><span class="n">n_samples</span><span class="p">)</span>
+            <span class="n">curr_sample_weight</span> <span class="o">*=</span> <span class="n">sample_counts</span>
+
+            <span class="n">estimator</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="p">[:,</span> <span class="n">features</span><span class="p">],</span> <span class="n">y</span><span class="p">,</span> <span class="n">sample_weight</span><span class="o">=</span><span class="n">curr_sample_weight</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">estimator</span><span class="o">.</span><span class="n">fit</span><span class="p">((</span><span class="n">X</span><span class="p">[</span><span class="n">indices</span><span class="p">])[:,</span> <span class="n">features</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">indices</span><span class="p">])</span>
+
+        <span class="n">estimators</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">estimator</span><span class="p">)</span>
+        <span class="n">estimators_features</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">features</span><span class="p">)</span>
+        <span class="n">estimators_indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">estimators</span><span class="p">,</span> <span class="n">estimators_features</span><span class="p">,</span> <span class="n">estimators_indices</span>
+
+
+<div class="viewcode-block" id="SequentiallyBootstrappedBaseBagging"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.sequentially_bootstrapped_bagging_classifier.SequentiallyBootstrappedBaseBagging">[docs]</a><span class="k">class</span> <span class="nc">SequentiallyBootstrappedBaseBagging</span><span class="p">(</span><span class="n">BaseBagging</span><span class="p">,</span> <span class="n">metaclass</span><span class="o">=</span><span class="n">ABCMeta</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Base class for Sequentially Bootstrapped Classifier and Regressor, extension of sklearn&#39;s BaseBagging</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">samples_info_sets</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+        <span class="n">price_bars</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+        <span class="n">base_estimator</span><span class="p">:</span> <span class="n">BaseEstimator</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">n_estimators</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+        <span class="n">max_samples</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">max_features</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">bootstrap_features</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">oob_score</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">warm_start</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">n_jobs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">random_state</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">verbose</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">event_end_time_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">EVENT_END_TIME</span><span class="p">,</span>
+        <span class="n">update_probs_every</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">base_estimator</span><span class="o">=</span><span class="n">base_estimator</span><span class="p">,</span>
+            <span class="n">n_estimators</span><span class="o">=</span><span class="n">n_estimators</span><span class="p">,</span>
+            <span class="n">bootstrap</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">max_samples</span><span class="o">=</span><span class="n">max_samples</span><span class="p">,</span>
+            <span class="n">max_features</span><span class="o">=</span><span class="n">max_features</span><span class="p">,</span>
+            <span class="n">bootstrap_features</span><span class="o">=</span><span class="n">bootstrap_features</span><span class="p">,</span>
+            <span class="n">oob_score</span><span class="o">=</span><span class="n">oob_score</span><span class="p">,</span>
+            <span class="n">warm_start</span><span class="o">=</span><span class="n">warm_start</span><span class="p">,</span>
+            <span class="n">n_jobs</span><span class="o">=</span><span class="n">n_jobs</span><span class="p">,</span>
+            <span class="n">random_state</span><span class="o">=</span><span class="n">random_state</span><span class="p">,</span>
+            <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">event_end_time_column_name</span> <span class="o">=</span> <span class="n">event_end_time_column_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">samples_info_sets</span> <span class="o">=</span> <span class="n">samples_info_sets</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">price_bars</span> <span class="o">=</span> <span class="n">price_bars</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ind_mat</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">update_probs_every</span> <span class="o">=</span> <span class="n">update_probs_every</span>
+
+        <span class="c1"># Used for create get ind_matrix subsample during cross-validation</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timestamp_int_index_mapping</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span>
+            <span class="n">index</span><span class="o">=</span><span class="n">samples_info_sets</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ind_mat</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">X_time_index</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># Timestamp index of X_train</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">ind_mat</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ind_mat</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_ind_mat</span> <span class="o">=</span> <span class="n">get_ind_matrix</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">samples_info_sets</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">price_bars</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">event_end_time_column_name</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ind_mat</span>
+
+<div class="viewcode-block" id="SequentiallyBootstrappedBaseBagging.fit"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.sequentially_bootstrapped_bagging_classifier.SequentiallyBootstrappedBaseBagging.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+        <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+        <span class="n">sample_weight</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Build a Sequentially Bootstrapped Bagging ensemble of estimators from the training</span>
+<span class="sd">           set (X, y).</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        X : {array-like, sparse matrix} of shape = [n_samples, n_features]</span>
+<span class="sd">            The training input samples. Sparse matrices are accepted only if</span>
+<span class="sd">            they are supported by the base estimator.</span>
+<span class="sd">        y : array-like, shape = [n_samples]</span>
+<span class="sd">            The target values (class labels in classification, real numbers in</span>
+<span class="sd">            regression).</span>
+<span class="sd">        sample_weight : array-like, shape = [n_samples] or None</span>
+<span class="sd">            Sample weights. If None, then samples are equally weighted.</span>
+<span class="sd">            Note that this is supported only if the base estimator supports</span>
+<span class="sd">            sample weighting.</span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        self : object</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fit</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_samples</span><span class="p">,</span> <span class="n">sample_weight</span><span class="o">=</span><span class="n">sample_weight</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">_fit</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+        <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+        <span class="n">max_samples</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">max_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">sample_weight</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;Build a Sequentially Bootstrapped Bagging ensemble of estimators from the training</span>
+<span class="sd">           set (X, y).</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        X : {array-like, sparse matrix} of shape = [n_samples, n_features]</span>
+<span class="sd">            The training input samples. Sparse matrices are accepted only if</span>
+<span class="sd">            they are supported by the base estimator.</span>
+<span class="sd">        y : array-like, shape = [n_samples]</span>
+<span class="sd">            The target values (class labels in classification, real numbers in</span>
+<span class="sd">            regression).</span>
+<span class="sd">        max_samples : int or float, optional (default=None)</span>
+<span class="sd">            Argument to use instead of self.max_samples.</span>
+<span class="sd">        max_depth : int, optional (default=None)expiritation</span>
+<span class="sd">            Override value used when constructing base estimator. Only</span>
+<span class="sd">            supported if the base estimator has a max_depth parameter.</span>
+<span class="sd">        sample_weight : array-like, shape = [n_samples] or None</span>
+<span class="sd">            Sample weights. If None, then samples are equally weighted.</span>
+<span class="sd">            Note that this is supported only if the base estimator supports</span>
+<span class="sd">            sample weighting.</span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        self : object</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">),</span> <span class="s2">&quot;X should be a dataframe with time indices&quot;</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">),</span> <span class="s2">&quot;y should be a series with time indices&quot;</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span>
+            <span class="n">X</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DatetimeIndex</span>
+        <span class="p">),</span> <span class="s2">&quot;X index should be a DatetimeIndex&quot;</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span>
+            <span class="n">y</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DatetimeIndex</span>
+        <span class="p">),</span> <span class="s2">&quot;y index should be a DatetimeIndex&quot;</span>
+
+        <span class="n">random_state</span> <span class="o">=</span> <span class="n">check_random_state</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">random_state</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">X_time_index</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">index</span>  <span class="c1"># Remember X index for future sampling</span>
+
+        <span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp_int_index_mapping</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">issuperset</span><span class="p">(</span>
+            <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X_time_index</span><span class="p">)</span>
+        <span class="p">),</span> <span class="s2">&quot;The ind matrix timestamps should have all the timestamps in the training data&quot;</span>
+
+        <span class="c1"># Generate subsample ind_matrix (we need this during subsampling cross_validation)</span>
+        <span class="n">ind_mat</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ind_mat</span><span class="o">.</span><span class="n">tocsc</span><span class="p">()</span>
+
+        <span class="n">subsampled_ind_mat</span> <span class="o">=</span> <span class="n">ind_mat</span><span class="p">[</span>
+            <span class="p">:,</span> <span class="bp">self</span><span class="o">.</span><span class="n">timestamp_int_index_mapping</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">X_time_index</span><span class="p">]</span>
+        <span class="p">]</span>
+
+        <span class="c1"># Convert data (X is required to be 2d and indexable)</span>
+        <span class="n">X</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">check_X_y</span><span class="p">(</span>
+            <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="p">[</span><span class="s2">&quot;csr&quot;</span><span class="p">,</span> <span class="s2">&quot;csc&quot;</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">force_all_finite</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">multi_output</span><span class="o">=</span><span class="kc">True</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">sample_weight</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">sample_weight</span> <span class="o">=</span> <span class="n">check_array</span><span class="p">(</span><span class="n">sample_weight</span><span class="p">,</span> <span class="n">ensure_2d</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">check_consistent_length</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">sample_weight</span><span class="p">)</span>
+
+        <span class="c1"># Remap output</span>
+        <span class="n">n_samples</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_features_</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_n_samples</span> <span class="o">=</span> <span class="n">n_samples</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_validate_y</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+
+        <span class="c1"># Check parameters</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_validate_estimator</span><span class="p">()</span>
+
+        <span class="c1"># Validate max_samples</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">max_samples</span><span class="p">,</span> <span class="p">(</span><span class="n">numbers</span><span class="o">.</span><span class="n">Integral</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">integer</span><span class="p">)):</span>
+            <span class="n">max_samples</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">max_samples</span> <span class="o">*</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="mi">0</span> <span class="o">&lt;</span> <span class="n">max_samples</span> <span class="o">&lt;=</span> <span class="n">X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;max_samples must be in (0, n_samples]&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Store validated integer row sampling value</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_max_samples</span> <span class="o">=</span> <span class="n">max_samples</span>
+
+        <span class="c1"># Validate max_features</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_features</span><span class="p">,</span> <span class="p">(</span><span class="n">numbers</span><span class="o">.</span><span class="n">Integral</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">integer</span><span class="p">)):</span>
+            <span class="n">max_features</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_features</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_features</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">float</span><span class="p">):</span>
+            <span class="n">max_features</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_features</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_features_</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;max_features must be int or float&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="mi">0</span> <span class="o">&lt;</span> <span class="n">max_features</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_features_</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;max_features must be in (0, n_features]&quot;</span><span class="p">)</span>
+
+        <span class="n">max_features</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">max_features</span><span class="p">))</span>
+
+        <span class="c1"># Store validated integer feature sampling value</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_max_features</span> <span class="o">=</span> <span class="n">max_features</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">warm_start</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">oob_score</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Out of bag estimate only available if warm_start=False&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">warm_start</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;estimators_&quot;</span><span class="p">):</span>
+            <span class="c1"># Free allocated memory, if anyexpiritation</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">estimators_</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">estimators_features_</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sequentially_bootstrapped_samples_</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">n_more_estimators</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_estimators</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">estimators_</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">n_more_estimators</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;n_estimators=</span><span class="si">%d</span><span class="s2"> must be larger or equal to &quot;</span>
+                <span class="s2">&quot;len(estimators_)=</span><span class="si">%d</span><span class="s2"> when warm_start==True&quot;</span>
+                <span class="o">%</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_estimators</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">estimators_</span><span class="p">))</span>
+            <span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">n_more_estimators</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">warn</span><span class="p">(</span>
+                <span class="s2">&quot;Warm-start fitting without increasing n_estimators does not &quot;</span>
+                <span class="s2">&quot;fit new trees.&quot;</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span>
+
+        <span class="c1"># Parallel loop</span>
+        <span class="n">n_jobs</span><span class="p">,</span> <span class="n">n_estimators</span><span class="p">,</span> <span class="n">starts</span> <span class="o">=</span> <span class="n">_partition_estimators</span><span class="p">(</span>
+            <span class="n">n_more_estimators</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_jobs</span>
+        <span class="p">)</span>
+        <span class="n">total_n_estimators</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">n_estimators</span><span class="p">)</span>
+
+        <span class="c1"># Advance random state to state after training</span>
+        <span class="c1"># the first n_estimators</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">warm_start</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">estimators_</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">random_state</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">MAX_INT</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">estimators_</span><span class="p">))</span>
+
+        <span class="n">seeds</span> <span class="o">=</span> <span class="n">random_state</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">MAX_INT</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">n_more_estimators</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_seeds</span> <span class="o">=</span> <span class="n">seeds</span>
+
+        <span class="n">all_results</span> <span class="o">=</span> <span class="n">Parallel</span><span class="p">(</span><span class="n">n_jobs</span><span class="o">=</span><span class="n">n_jobs</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">verbose</span><span class="p">,)(</span>
+            <span class="n">delayed</span><span class="p">(</span><span class="n">_parallel_build_estimators</span><span class="p">)(</span>
+                <span class="n">n_estimators</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                <span class="bp">self</span><span class="p">,</span>
+                <span class="n">X</span><span class="p">,</span>
+                <span class="n">y</span><span class="p">,</span>
+                <span class="n">subsampled_ind_mat</span><span class="p">,</span>
+                <span class="n">sample_weight</span><span class="p">,</span>
+                <span class="n">seeds</span><span class="p">[</span><span class="n">starts</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="p">:</span> <span class="n">starts</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]],</span>
+                <span class="n">total_n_estimators</span><span class="p">,</span>
+                <span class="n">verbose</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">verbose</span><span class="p">,</span>
+                <span class="n">update_probs_every</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">update_probs_every</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_jobs</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Reduce</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">estimators_</span> <span class="o">+=</span> <span class="nb">list</span><span class="p">(</span>
+            <span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="o">.</span><span class="n">from_iterable</span><span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">all_results</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">estimators_features_</span> <span class="o">+=</span> <span class="nb">list</span><span class="p">(</span>
+            <span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="o">.</span><span class="n">from_iterable</span><span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">all_results</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sequentially_bootstrapped_samples_</span> <span class="o">+=</span> <span class="nb">list</span><span class="p">(</span>
+            <span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="o">.</span><span class="n">from_iterable</span><span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">all_results</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">oob_score</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_set_oob_score</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ind_mat</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="SequentiallyBootstrappedBaggingClassifier"><a class="viewcode-back" href="../../../mizarlabs.model.html#mizarlabs.model.sequentially_bootstrapped_bagging_classifier.SequentiallyBootstrappedBaggingClassifier">[docs]</a><span class="k">class</span> <span class="nc">SequentiallyBootstrappedBaggingClassifier</span><span class="p">(</span>
+    <span class="n">SequentiallyBootstrappedBaseBagging</span><span class="p">,</span> <span class="n">BaggingClassifier</span><span class="p">,</span> <span class="n">ClassifierMixin</span>
+<span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A Sequentially Bootstrapped Bagging classifier is an ensemble meta-estimator that fits base</span>
+<span class="sd">    classifiers each on random subsets of the original dataset generated using</span>
+<span class="sd">    Sequential Bootstrapping sampling procedure and then aggregate their individual predictions (</span>
+<span class="sd">    either by voting or by averaging) to form a final prediction. Such a meta-estimator can typically be used as</span>
+<span class="sd">    a way to reduce the variance of a black-box estimator (e.g., a decision</span>
+<span class="sd">    tree), by introducing randomization into its construction procedure and</span>
+<span class="sd">    then making an ensemble out of it.</span>
+<span class="sd">    :param samples_info_sets: pd.Series, The information range on which each record is constructed from</span>
+<span class="sd">        *samples_info_sets.index*: Time when the information extraction started.</span>
+<span class="sd">        *samples_info_sets.value*: Time when the information extraction ended.</span>
+<span class="sd">    :param price_bars: pd.DataFrame</span>
+<span class="sd">        Price bars used in samples_info_sets generation</span>
+<span class="sd">    :param base_estimator: object or None, optional (default=None)</span>
+<span class="sd">        The base estimator to fit on random subsets of the dataset.</span>
+<span class="sd">        If None, then the base estimator is a decision tree.</span>
+<span class="sd">    :param n_estimators: int, optional (default=10)</span>
+<span class="sd">        The number of base estimators in the ensemble.</span>
+<span class="sd">    :param max_samples: int or float, optional (default=1.0)</span>
+<span class="sd">        The number of samples to draw from X to train each base estimator.</span>
+<span class="sd">        If int, then draw `max_samples` samples. If float, then draw `max_samples * X.shape[0]` samples.</span>
+<span class="sd">    :param max_features: int or float, optional (default=1.0)</span>
+<span class="sd">        The number of features to draw from X to train each base estimator.</span>
+<span class="sd">        If int, then draw `max_features` features. If float, then draw `max_features * X.shape[1]` features.</span>
+<span class="sd">    :param bootstrap_features: boolean, optional (default=False)</span>
+<span class="sd">        Whether features are drawn with replacement.</span>
+<span class="sd">    :param oob_score: bool, optional (default=False)</span>
+<span class="sd">        Whether to use out-of-bag samples to estimate</span>
+<span class="sd">        the generalization error.</span>
+<span class="sd">    :param warm_start: bool, optional (default=False)</span>
+<span class="sd">        When set to True, reuse the solution of the previous call to fit</span>
+<span class="sd">        and add more estimators to the ensemble, otherwise, just fit</span>
+<span class="sd">        a whole new ensemble.</span>
+<span class="sd">    :param n_jobs: int or None, optional (default=None)</span>
+<span class="sd">        The number of jobs to run in parallel for both `fit` and `predict`.</span>
+<span class="sd">        ``None`` means 1 unless in a :obj:`joblib.parallel_backend` context.</span>
+<span class="sd">        ``-1`` means using all processors.</span>
+<span class="sd">    :param random_state: int, RandomState instance or None, optional (default=None)</span>
+<span class="sd">        If int, random_state is the seed used by the random number generator;</span>
+<span class="sd">        If RandomState instance, random_state is the random number generator;</span>
+<span class="sd">        If None, the random number generator is the RandomState instance used</span>
+<span class="sd">        by `np.random`.</span>
+<span class="sd">    :param verbose: int, optional (default=0)</span>
+<span class="sd">        Controls the verbosity when fitting and predicting.</span>
+<span class="sd">    :param event_end_time_column_name: str, optional (default=EXPIRATION_BARRIER)</span>
+<span class="sd">        name of the column with the expiration barrier dates.</span>
+<span class="sd">    :param update_probs_every: int, optional (default=1)</span>
+<span class="sd">        Only update the sampling probabilities with average uniqueness after</span>
+<span class="sd">        update_probs_every times, this will speed up training, but at the cost that you</span>
+<span class="sd">        do not sample perfectly according to the average uniqueness</span>
+<span class="sd">    :ivar base_estimator_: estimator</span>
+<span class="sd">        The base estimator from which the ensemble is grown.</span>
+<span class="sd">    :ivar estimators_: list of estimators</span>
+<span class="sd">        The collection of fitted base estimators.</span>
+<span class="sd">    :ivar estimators_samples_: list of arrays</span>
+<span class="sd">        The subset of drawn samples (i.e., the in-bag samples) for each base</span>
+<span class="sd">        estimator. Each subset is defined by an array of the indices selected.</span>
+<span class="sd">    :ivar estimators_features_: list of arrays</span>
+<span class="sd">        The subset of drawn features for each base estimator.</span>
+<span class="sd">    :ivar classes_: array of shape = [n_classes]</span>
+<span class="sd">        The classes labels.</span>
+<span class="sd">    :ivar n_classes_: int or list</span>
+<span class="sd">        The number of classes.</span>
+<span class="sd">    :ivar oob_score_: float</span>
+<span class="sd">        Score of the training dataset obtained using an out-of-bag estimate.</span>
+<span class="sd">    :ivar oob_decision_function_: array of shape = [n_samples, n_classes]</span>
+<span class="sd">        Decision function computed with out-of-bag estimate on the training</span>
+<span class="sd">        set. If n_estimators is small it might be possible that a data point</span>
+<span class="sd">        was never left out during the bootstrap. In this case,</span>
+<span class="sd">        `oob_decision_function_` might contain NaN.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">samples_info_sets</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+        <span class="n">price_bars</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+        <span class="n">base_estimator</span><span class="p">:</span> <span class="n">BaseEstimator</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">n_estimators</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span>
+        <span class="n">max_samples</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">max_features</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">bootstrap_features</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">oob_score</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">warm_start</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">n_jobs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">random_state</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">verbose</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">event_end_time_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">EVENT_END_TIME</span><span class="p">,</span>
+        <span class="n">update_probs_every</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">samples_info_sets</span><span class="o">=</span><span class="n">samples_info_sets</span><span class="p">,</span>
+            <span class="n">price_bars</span><span class="o">=</span><span class="n">price_bars</span><span class="p">,</span>
+            <span class="n">base_estimator</span><span class="o">=</span><span class="n">base_estimator</span><span class="p">,</span>
+            <span class="n">n_estimators</span><span class="o">=</span><span class="n">n_estimators</span><span class="p">,</span>
+            <span class="n">max_samples</span><span class="o">=</span><span class="n">max_samples</span><span class="p">,</span>
+            <span class="n">max_features</span><span class="o">=</span><span class="n">max_features</span><span class="p">,</span>
+            <span class="n">bootstrap_features</span><span class="o">=</span><span class="n">bootstrap_features</span><span class="p">,</span>
+            <span class="n">oob_score</span><span class="o">=</span><span class="n">oob_score</span><span class="p">,</span>
+            <span class="n">warm_start</span><span class="o">=</span><span class="n">warm_start</span><span class="p">,</span>
+            <span class="n">n_jobs</span><span class="o">=</span><span class="n">n_jobs</span><span class="p">,</span>
+            <span class="n">random_state</span><span class="o">=</span><span class="n">random_state</span><span class="p">,</span>
+            <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span>
+            <span class="n">event_end_time_column_name</span><span class="o">=</span><span class="n">event_end_time_column_name</span><span class="p">,</span>
+            <span class="n">update_probs_every</span><span class="o">=</span><span class="n">update_probs_every</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_validate_estimator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Check the estimator and set the base_estimator_ attribute.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">BaggingClassifier</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">_validate_estimator</span><span class="p">(</span>
+            <span class="n">default</span><span class="o">=</span><span class="n">DecisionTreeClassifier</span><span class="p">()</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_set_oob_score</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Calculates and sets the out of bag score.</span>
+
+<span class="sd">        :param X: DataFrame with features.</span>
+<span class="sd">        :type X: pd.DataFrame</span>
+<span class="sd">        :param y: Series with labels.</span>
+<span class="sd">        :type y: pd.Series</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">n_samples</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">n_classes_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_classes_</span>
+
+        <span class="n">predictions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n_samples</span><span class="p">,</span> <span class="n">n_classes_</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">estimator</span><span class="p">,</span> <span class="n">samples</span><span class="p">,</span> <span class="n">features</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">estimators_</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sequentially_bootstrapped_samples_</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">estimators_features_</span><span class="p">,</span>
+        <span class="p">):</span>
+            <span class="c1"># Create mask for OOB samples</span>
+            <span class="n">mask</span> <span class="o">=</span> <span class="o">~</span><span class="n">indices_to_mask</span><span class="p">(</span><span class="n">samples</span><span class="p">,</span> <span class="n">n_samples</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">estimator</span><span class="p">,</span> <span class="s2">&quot;predict_proba&quot;</span><span class="p">):</span>
+                <span class="n">predictions</span><span class="p">[</span><span class="n">mask</span><span class="p">,</span> <span class="p">:]</span> <span class="o">+=</span> <span class="n">estimator</span><span class="o">.</span><span class="n">predict_proba</span><span class="p">(</span>
+                    <span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="n">mask</span><span class="p">,</span> <span class="p">:])[:,</span> <span class="n">features</span><span class="p">]</span>
+                <span class="p">)</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">p</span> <span class="o">=</span> <span class="n">estimator</span><span class="o">.</span><span class="n">predict</span><span class="p">((</span><span class="n">X</span><span class="p">[</span><span class="n">mask</span><span class="p">,</span> <span class="p">:])[:,</span> <span class="n">features</span><span class="p">])</span>
+                <span class="n">j</span> <span class="o">=</span> <span class="mi">0</span>
+
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_samples</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">mask</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span>
+                        <span class="n">predictions</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">p</span><span class="p">[</span><span class="n">j</span><span class="p">]]</span> <span class="o">+=</span> <span class="mi">1</span>
+                        <span class="n">j</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">predictions</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+            <span class="n">warn</span><span class="p">(</span>
+                <span class="s2">&quot;Some inputs do not have OOB scores. &quot;</span>
+                <span class="s2">&quot;This probably means too few estimators were used &quot;</span>
+                <span class="s2">&quot;to compute any reliable oob estimates.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">oob_decision_function</span> <span class="o">=</span> <span class="n">predictions</span> <span class="o">/</span> <span class="n">predictions</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+        <span class="n">oob_score</span> <span class="o">=</span> <span class="n">accuracy_score</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">predictions</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">oob_decision_function_</span> <span class="o">=</span> <span class="n">oob_decision_function</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">oob_score_</span> <span class="o">=</span> <span class="n">oob_score</span></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">MizarLabs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, MizarAI.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

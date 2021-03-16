@@ -1,0 +1,345 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mizarlabs.transformers.trading.bet_sizing &#8212; MizarLabs 0.1.3 documentation</title>
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../../" src="../../../../_static/documentation_options.js"></script>
+    <script src="../../../../_static/jquery.js"></script>
+    <script src="../../../../_static/underscore.js"></script>
+    <script src="../../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for mizarlabs.transformers.trading.bet_sizing</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">abc</span> <span class="kn">import</span> <span class="n">abstractmethod</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">EVENT_END_TIME</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.transformers.utils</span> <span class="kn">import</span> <span class="n">check_missing_columns</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.transformers.utils</span> <span class="kn">import</span> <span class="n">convert_to_timestamp</span>
+<span class="kn">from</span> <span class="nn">numba</span> <span class="kn">import</span> <span class="n">jit</span>
+<span class="kn">from</span> <span class="nn">numba</span> <span class="kn">import</span> <span class="n">prange</span>
+<span class="kn">from</span> <span class="nn">scipy.stats</span> <span class="kn">import</span> <span class="n">norm</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">BaseEstimator</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">TransformerMixin</span>
+
+<span class="n">BET_SIZE</span> <span class="o">=</span> <span class="s2">&quot;bet_size&quot;</span>
+<span class="n">PROBABILITY</span> <span class="o">=</span> <span class="s2">&quot;prob&quot;</span>
+<span class="n">PREDICTION</span> <span class="o">=</span> <span class="s2">&quot;pred&quot;</span>
+<span class="n">SIDE</span> <span class="o">=</span> <span class="s2">&quot;side&quot;</span>
+
+
+<div class="viewcode-block" id="BetSizingBase"><a class="viewcode-back" href="../../../../mizarlabs.transformers.trading.html#mizarlabs.transformers.trading.bet_sizing.BetSizingBase">[docs]</a><span class="k">class</span> <span class="nc">BetSizingBase</span><span class="p">(</span><span class="n">BaseEstimator</span><span class="p">,</span> <span class="n">TransformerMixin</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Base class for bet sizing transformers</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="BetSizingBase.transform"><a class="viewcode-back" href="../../../../mizarlabs.transformers.trading.html#mizarlabs.transformers.trading.bet_sizing.BetSizingBase.transform">[docs]</a>    <span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+
+        <span class="n">bet_sizing_signal</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_transform</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+
+        <span class="k">assert</span> <span class="p">(</span><span class="n">bet_sizing_signal</span> <span class="o">&gt;=</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">(),</span> <span class="s2">&quot;The bet size signal should be &gt;= -1&quot;</span>
+        <span class="k">assert</span> <span class="p">(</span><span class="n">bet_sizing_signal</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">(),</span> <span class="s2">&quot;The bet size signal should be &lt;= 1&quot;</span>
+
+        <span class="k">return</span> <span class="n">bet_sizing_signal</span></div>
+
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+        <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="BetSizingFromProbabilities"><a class="viewcode-back" href="../../../../mizarlabs.transformers.trading.html#mizarlabs.transformers.trading.bet_sizing.BetSizingFromProbabilities">[docs]</a><span class="k">class</span> <span class="nc">BetSizingFromProbabilities</span><span class="p">(</span><span class="n">BetSizingBase</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Calculate the bet size using the predicted probability.</span>
+
+<span class="sd">    :param num_classes: Number of labeled classes</span>
+<span class="sd">    :type num_classes: int</span>
+<span class="sd">    :param average_active: Whether we need to apply the average</span>
+<span class="sd">                           active to the bet sizing signal</span>
+<span class="sd">    :type average_active: bool, optional</span>
+<span class="sd">    :param meta_labeling: Whether the bet sizing is calculated from a</span>
+<span class="sd">                          metalabeling signal</span>
+<span class="sd">    :type meta_labeling: bool, optional</span>
+<span class="sd">    :param discretise: Whether the output needs to be discretised</span>
+<span class="sd">    :type discretise: bool, optional</span>
+<span class="sd">    :param step_size: The step size of the discretisation</span>
+<span class="sd">    :type step_size: int, optional</span>
+<span class="sd">    :param probability_column_name: The column name of the probabilities</span>
+<span class="sd">    :type probability_column_name: str, optional</span>
+<span class="sd">    :param prediction_column_name: The column name of the predictions</span>
+<span class="sd">    :type prediction_column_name: str, optional</span>
+<span class="sd">    :param side_column_name: The column name of the side of the &#39;simpler&#39;</span>
+<span class="sd">                             metalabeling model</span>
+<span class="sd">    :type side_column_name: str, optional</span>
+<span class="sd">    :param event_end_time_column_name: The column name of the event end time</span>
+<span class="sd">    :rtype event_end_time_column_name: str, optional</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">num_classes</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">average_active</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">meta_labeling</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">discretise</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">step_size</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">probability_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PROBABILITY</span><span class="p">,</span>
+        <span class="n">prediction_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">PREDICTION</span><span class="p">,</span>
+        <span class="n">side_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">SIDE</span><span class="p">,</span>
+        <span class="n">event_end_time_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">EVENT_END_TIME</span><span class="p">,</span>
+        <span class="n">bet_size_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">BET_SIZE</span><span class="p">,</span>
+    <span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_side_column_name</span> <span class="o">=</span> <span class="n">side_column_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_metalabeling</span> <span class="o">=</span> <span class="n">meta_labeling</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_average_active</span> <span class="o">=</span> <span class="n">average_active</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_step_size</span> <span class="o">=</span> <span class="n">step_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_num_classes</span> <span class="o">=</span> <span class="n">num_classes</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_probability_column_name</span> <span class="o">=</span> <span class="n">probability_column_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_prediction_column_name</span> <span class="o">=</span> <span class="n">prediction_column_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_event_end_time_column_name</span> <span class="o">=</span> <span class="n">event_end_time_column_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_discretise</span> <span class="o">=</span> <span class="n">discretise</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bet_size_column_name</span> <span class="o">=</span> <span class="n">bet_size_column_name</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_discretise</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_discretise</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_step_size</span><span class="p">,</span> <span class="p">(</span>
+                <span class="s2">&quot;When discretise is activated, step size should be &quot;</span>
+                <span class="s2">&quot;set with value between 0 and 1&quot;</span>
+            <span class="p">)</span>
+            <span class="k">assert</span> <span class="p">(</span>
+                <span class="mi">0</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_step_size</span> <span class="o">&lt;</span> <span class="mi">1</span>
+            <span class="p">),</span> <span class="s2">&quot;The step size should be greater than zero and less than 1&quot;</span>
+
+    <span class="k">def</span> <span class="nf">_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+        <span class="n">check_missing_columns</span><span class="p">(</span>
+            <span class="n">X</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_probability_column_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prediction_column_name</span><span class="p">]</span>
+        <span class="p">)</span>
+
+        <span class="c1"># generate signals from multinomial classification (one-vs-rest, OvR)</span>
+        <span class="n">test_statistic_z</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_probability_column_name</span><span class="p">]</span> <span class="o">-</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">_num_classes</span>
+        <span class="p">)</span> <span class="o">/</span> <span class="p">(</span>
+            <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_probability_column_name</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_probability_column_name</span><span class="p">])</span>
+        <span class="p">)</span> <span class="o">**</span> <span class="mf">0.5</span>
+
+        <span class="c1"># signal=side*size</span>
+        <span class="n">bet_sizing_signal</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_prediction_column_name</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span>
+            <span class="mi">2</span> <span class="o">*</span> <span class="n">norm</span><span class="o">.</span><span class="n">cdf</span><span class="p">(</span><span class="n">test_statistic_z</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_metalabeling</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_side_column_name</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">())</span><span class="o">.</span><span class="n">issubset</span><span class="p">(</span>
+                <span class="p">{</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">}</span>
+            <span class="p">),</span> <span class="s2">&quot;The side should be 1, -1 or 0&quot;</span>
+
+            <span class="n">check_missing_columns</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_side_column_name</span><span class="p">])</span>
+            <span class="n">bet_sizing_signal</span> <span class="o">*=</span> <span class="n">X</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">bet_sizing_signal</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_side_column_name</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_average_active</span><span class="p">:</span>
+            <span class="n">bet_sizing_signal_with_barrier</span> <span class="o">=</span> <span class="n">bet_sizing_signal</span><span class="o">.</span><span class="n">to_frame</span><span class="p">(</span><span class="n">BET_SIZE</span><span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="n">X</span><span class="p">[[</span><span class="bp">self</span><span class="o">.</span><span class="n">_event_end_time_column_name</span><span class="p">]],</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span>
+            <span class="p">)</span>
+
+            <span class="n">bet_sizing_signal</span> <span class="o">=</span> <span class="n">avg_active_signals</span><span class="p">(</span>
+                <span class="n">bet_sizing_signal_with_barrier</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_event_end_time_column_name</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_bet_size_column_name</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_discretise</span><span class="p">:</span>
+            <span class="n">bet_sizing_signal</span> <span class="o">=</span> <span class="n">discretise_signal</span><span class="p">(</span><span class="n">bet_sizing_signal</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_step_size</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">bet_sizing_signal</span></div>
+
+
+<div class="viewcode-block" id="avg_active_signals"><a class="viewcode-back" href="../../../../mizarlabs.transformers.trading.html#mizarlabs.transformers.trading.bet_sizing.avg_active_signals">[docs]</a><span class="k">def</span> <span class="nf">avg_active_signals</span><span class="p">(</span>
+    <span class="n">signals</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="n">event_end_time_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">EVENT_END_TIME</span><span class="p">,</span>
+    <span class="n">bet_size_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">BET_SIZE</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Average the bet sizes of all concurrently not closed positions</span>
+<span class="sd">    (e.i. no barrier has been hit yet)</span>
+
+<span class="sd">    :param signals: Signal from which the active average is calculated</span>
+<span class="sd">    :rtype signals: pd.DataFrame</span>
+<span class="sd">    :param event_end_time_column_name: the name of the event end time</span>
+<span class="sd">    :type event_end_time_column_name: str, optional</span>
+<span class="sd">    :param bet_size_column_name: the name of the bet size column</span>
+<span class="sd">    :type bet_size_column_name: str, optional</span>
+<span class="sd">    :return: The active average signal</span>
+<span class="sd">    :rtype: pd.DataFrame</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># compute the average bet size among those active</span>
+    <span class="c1"># time points were bet size change (either one starts or one ends)</span>
+    <span class="n">active_bet_size_time_indices</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span>
+        <span class="n">signals</span><span class="p">[</span><span class="n">event_end_time_column_name</span><span class="p">]</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span><span class="o">.</span><span class="n">values</span>
+    <span class="p">)</span>
+    <span class="n">active_bet_size_time_indices</span> <span class="o">=</span> <span class="n">active_bet_size_time_indices</span><span class="o">.</span><span class="n">union</span><span class="p">(</span>
+        <span class="n">signals</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">values</span>
+    <span class="p">)</span>
+    <span class="n">active_bet_size_time_indices</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">active_bet_size_time_indices</span><span class="p">)</span>
+    <span class="n">active_bet_size_time_indices</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+    <span class="n">active_bet_size_time_indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">active_bet_size_time_indices</span><span class="p">)</span>
+
+    <span class="n">avg_active_bet_size_list</span> <span class="o">=</span> <span class="n">_get_avg_active_signals</span><span class="p">(</span>
+        <span class="n">signals</span><span class="o">.</span><span class="n">loc</span><span class="p">[:,</span> <span class="n">bet_size_column_name</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+        <span class="n">convert_to_timestamp</span><span class="p">(</span><span class="n">active_bet_size_time_indices</span><span class="p">),</span>
+        <span class="n">convert_to_timestamp</span><span class="p">(</span><span class="n">signals</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">values</span><span class="p">),</span>
+        <span class="n">convert_to_timestamp</span><span class="p">(</span><span class="n">signals</span><span class="p">[</span><span class="n">event_end_time_column_name</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="n">avg_active_bet_size</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span>
+        <span class="n">avg_active_bet_size_list</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">active_bet_size_time_indices</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">avg_active_bet_size</span></div>
+
+
+<span class="nd">@jit</span><span class="p">(</span><span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nopython</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">_get_avg_active_signals</span><span class="p">(</span>
+    <span class="n">bet_size_signal</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">active_bet_size_time_indices</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">signal_timestamp_index</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">expiration_barrier_timestamp</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Calculate the average active bet signal from the overlapping bets</span>
+
+<span class="sd">    :param bet_size_signal: The bet size signal not averaged by active signals</span>
+<span class="sd">    :type bet_size_signal: np.ndarray</span>
+<span class="sd">    :param active_bet_size_time_indices: The timestamps when at least one</span>
+<span class="sd">                                         signal is active</span>
+<span class="sd">    :type active_bet_size_time_indices: np.ndarray</span>
+<span class="sd">    :param signal_timestamp_index: The timestamps of the signal bet signal</span>
+<span class="sd">    :type signal_timestamp_index: np.ndarray</span>
+<span class="sd">    :param expiration_barrier_timestamp: The timestamps of the expiration</span>
+<span class="sd">                                         barriers</span>
+<span class="sd">    :type expiration_barrier_timestamp: np.ndarray</span>
+<span class="sd">    :return: The average active bet size</span>
+<span class="sd">    :rtype: np.ndarray</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># init the average active bet sizes array with zeros</span>
+    <span class="n">avg_active_bet_size</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">active_bet_size_time_indices</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">prange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">active_bet_size_time_indices</span><span class="p">)):</span>
+        <span class="n">active_bet_size_time</span> <span class="o">=</span> <span class="n">active_bet_size_time_indices</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="c1"># mask that finds where the bet signals are overlapping</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">less_equal</span><span class="p">(</span>
+            <span class="n">signal_timestamp_index</span><span class="p">,</span> <span class="n">active_bet_size_time</span>
+        <span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">logical_or</span><span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">less</span><span class="p">(</span><span class="n">active_bet_size_time</span><span class="p">,</span> <span class="n">expiration_barrier_timestamp</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">less</span><span class="p">(</span><span class="n">expiration_barrier_timestamp</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="c1"># select the active bet sizes signals and calculates the mean</span>
+        <span class="n">active_bets_timestamps</span> <span class="o">=</span> <span class="n">signal_timestamp_index</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">active_bets_timestamps</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">avg_active_bet_size</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">bet_size_signal</span><span class="p">[</span><span class="n">mask</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">avg_active_bet_size</span>
+
+
+<div class="viewcode-block" id="discretise_signal"><a class="viewcode-back" href="../../../../mizarlabs.transformers.trading.html#mizarlabs.transformers.trading.bet_sizing.discretise_signal">[docs]</a><span class="k">def</span> <span class="nf">discretise_signal</span><span class="p">(</span><span class="n">signal</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">step_size</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Discretise the bet size signal based on the step size given.</span>
+
+<span class="sd">    :param signal: Signal to discretise</span>
+<span class="sd">    :type signal: pd.Series</span>
+<span class="sd">    :param step_size: the step size to use for the discretisation</span>
+<span class="sd">    :type step_size: float</span>
+<span class="sd">    :return: Discretised signal</span>
+<span class="sd">    :rtype: pd.Series</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">assert</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="n">step_size</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;The step size should be between 0 and 1&quot;</span>
+
+    <span class="n">discretised_signal</span> <span class="o">=</span> <span class="p">((</span><span class="n">signal</span> <span class="o">/</span> <span class="n">step_size</span><span class="p">)</span><span class="o">.</span><span class="n">round</span><span class="p">()</span> <span class="o">*</span> <span class="n">step_size</span><span class="p">)</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+    <span class="c1"># Capping the discretised signal to 1</span>
+    <span class="n">discretised_signal</span><span class="p">[</span><span class="n">discretised_signal</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="c1"># Flooring the discretised signal to 0</span>
+    <span class="n">discretised_signal</span><span class="p">[</span><span class="n">discretised_signal</span> <span class="o">&lt;</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+
+    <span class="k">return</span> <span class="n">discretised_signal</span></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">MizarLabs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, MizarAI.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

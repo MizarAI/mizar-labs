@@ -1,0 +1,156 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mizarlabs.transformers.sampling package &#8212; MizarLabs 0.1.3 documentation</title>
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="mizarlabs-transformers-sampling-package">
+<h1>mizarlabs.transformers.sampling package<a class="headerlink" href="#mizarlabs-transformers-sampling-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-mizarlabs.transformers.sampling.average_uniqueness">
+<span id="mizarlabs-transformers-sampling-average-uniqueness-module"></span><h2>mizarlabs.transformers.sampling.average_uniqueness module<a class="headerlink" href="#module-mizarlabs.transformers.sampling.average_uniqueness" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="mizarlabs.transformers.sampling.average_uniqueness.AverageUniqueness">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.sampling.average_uniqueness.</span></code><code class="sig-name descname"><span class="pre">AverageUniqueness</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">event_end_time_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'event_end_time'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/sampling/average_uniqueness.html#AverageUniqueness"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.sampling.average_uniqueness.AverageUniqueness" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.BaseEstimator</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.TransformerMixin</span></code></p>
+<p>Calculates the average uniqueness of samples.</p>
+<dl class="py method">
+<dt id="mizarlabs.transformers.sampling.average_uniqueness.AverageUniqueness.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">pandas.core.series.Series</span><a class="reference internal" href="_modules/mizarlabs/transformers/sampling/average_uniqueness.html#AverageUniqueness.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.sampling.average_uniqueness.AverageUniqueness.transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-mizarlabs.transformers.sampling.down_sampling">
+<span id="mizarlabs-transformers-sampling-down-sampling-module"></span><h2>mizarlabs.transformers.sampling.down_sampling module<a class="headerlink" href="#module-mizarlabs.transformers.sampling.down_sampling" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="mizarlabs.transformers.sampling.down_sampling.CUSUMFilter">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.sampling.down_sampling.</span></code><code class="sig-name descname"><span class="pre">CUSUMFilter</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">float</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/sampling/down_sampling.html#CUSUMFilter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.sampling.down_sampling.CUSUMFilter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.BaseEstimator</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.TransformerMixin</span></code></p>
+<p>Downsamples a timeseries to filter out non significant value
+changing samples.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>threshold</strong> (<em>float</em>) – Sets the threshold to trigger a sample, setting
+the threshold higher will result in less samples being selected.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="mizarlabs.transformers.sampling.down_sampling.CUSUMFilter.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.series.Series</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">pandas.core.indexes.datetimes.DatetimeIndex</span><a class="reference internal" href="_modules/mizarlabs/transformers/sampling/down_sampling.html#CUSUMFilter.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.sampling.down_sampling.CUSUMFilter.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a pandas DatetimeIndex indicating which samples have been
+selected by the CUSUM filter.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>X</strong> (<em>pd.Series</em>) – Time series with time indices.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>DatetimeIndex indicating which samples have been selected.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>pd.DatetimeIndex</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-mizarlabs.transformers.sampling">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-mizarlabs.transformers.sampling" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">MizarLabs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, MizarAI.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/mizarlabs.transformers.sampling.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

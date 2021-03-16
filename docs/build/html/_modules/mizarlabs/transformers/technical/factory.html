@@ -1,0 +1,352 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mizarlabs.transformers.technical.factory &#8212; MizarLabs 0.1.3 documentation</title>
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../../" src="../../../../_static/documentation_options.js"></script>
+    <script src="../../../../_static/jquery.js"></script>
+    <script src="../../../../_static/underscore.js"></script>
+    <script src="../../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for mizarlabs.transformers.technical.factory</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Dict</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Tuple</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">attr</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">talib</span>
+<span class="kn">from</span> <span class="nn">sklearn.preprocessing</span> <span class="kn">import</span> <span class="n">FunctionTransformer</span>
+
+
+<div class="viewcode-block" id="TAFactory"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.factory.TAFactory">[docs]</a><span class="nd">@attr</span><span class="o">.</span><span class="n">s</span>
+<span class="k">class</span> <span class="nc">TAFactory</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Factory that creates sklearn transformers for function available in the TA-lib package.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">ta_func_dict</span> <span class="o">=</span> <span class="n">talib</span><span class="o">.</span><span class="vm">__dict__</span>
+    <span class="n">_real</span> <span class="o">=</span> <span class="s2">&quot;real&quot;</span>
+
+<div class="viewcode-block" id="TAFactory.get_function_groups"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.factory.TAFactory.get_function_groups">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_function_groups</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns a dictionary with TA-lib function names specified per group.</span>
+
+<span class="sd">        :return: the key-value pairs are group names by list of function names</span>
+<span class="sd">        :rtype: Dict[str, str]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">talib</span><span class="o">.</span><span class="n">get_function_groups</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="TAFactory.get_functions"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.factory.TAFactory.get_functions">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_functions</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns all the available function names in TA-lib package.</span>
+
+<span class="sd">        :return: list with function names in the TA-lib package.</span>
+<span class="sd">        :rtype: List[str]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">talib</span><span class="o">.</span><span class="n">get_functions</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="TAFactory.get_args_kwargs"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.factory.TAFactory.get_args_kwargs">[docs]</a>    <span class="k">def</span> <span class="nf">get_args_kwargs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns a tuple with a list of valid argument names and keyword argument names for the TA function.</span>
+
+<span class="sd">        :param func_name: function name in the TA-lib package</span>
+<span class="sd">        :type func_name: str</span>
+<span class="sd">        :return: first element is the list with valid argument names and the second element is the list with</span>
+<span class="sd">                 valid keyword argument names.</span>
+<span class="sd">        :rtype: Tuple[List[str]]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ta_func</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_ta_func</span><span class="p">(</span><span class="n">func_name</span><span class="p">)</span>
+        <span class="n">signature</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;\((.+)\)&quot;</span><span class="p">,</span> <span class="n">ta_func</span><span class="o">.</span><span class="vm">__doc__</span><span class="p">)</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">args_kwargs_names</span> <span class="o">=</span> <span class="n">signature</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;[, &quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args_kwargs_names</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">args_names</span><span class="p">,</span> <span class="n">kwargs_names</span> <span class="o">=</span> <span class="n">args_kwargs_names</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="kc">None</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">args_names</span><span class="p">,</span> <span class="n">kwargs_names</span> <span class="o">=</span> <span class="n">args_kwargs_names</span>
+
+        <span class="n">args_names_list</span> <span class="o">=</span> <span class="n">args_names</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;, &quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">kwargs_names</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">kwargs_names_list</span> <span class="o">=</span> <span class="n">kwargs_names</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;=?]&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;=?, &quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">kwargs_names_list</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">args_names_list</span><span class="p">,</span> <span class="n">kwargs_names_list</span></div>
+
+<div class="viewcode-block" id="TAFactory.get_ta_func"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.factory.TAFactory.get_ta_func">[docs]</a>    <span class="k">def</span> <span class="nf">get_ta_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">callable</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the TA function callable.</span>
+
+<span class="sd">        :param func_name: name of the function in TA-lib package</span>
+<span class="sd">        :type func_name: str</span>
+<span class="sd">        :raises ValueError: if provided name does not exist as a function in the TA-lib package an error is raised</span>
+<span class="sd">        :return: the TA function which creates TA features</span>
+<span class="sd">        :rtype: callable</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">func_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ta_func_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;The func_name </span><span class="si">{</span><span class="n">func_name</span><span class="si">}</span><span class="s2"> is not available. Please check if the name is spelled correctly.&quot;</span>
+            <span class="p">)</span>
+        <span class="n">ta_func</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ta_func_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">func_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ta_func</span></div>
+
+<div class="viewcode-block" id="TAFactory.create_transformer"><a class="viewcode-back" href="../../../../mizarlabs.transformers.technical.html#mizarlabs.transformers.technical.factory.TAFactory.create_transformer">[docs]</a>    <span class="k">def</span> <span class="nf">create_transformer</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">func_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">col_to_transform</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">col_to_transform_mapping</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">kw_args</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FunctionTransformer</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Creates a transformer for a given function available in the TA-lib package.</span>
+
+<span class="sd">        :param func_name: name of function in TA-lib package</span>
+<span class="sd">        :type func_name: str</span>
+<span class="sd">        :param col_to_transform: name of the column in dataframe to transform, defaults to None</span>
+<span class="sd">        :type col_to_transform: Union[List[str], str], optional</span>
+<span class="sd">        :param col_to_transform_mapping: remapping of names in dataframe to valid arg names in the TA function,</span>
+<span class="sd">                                         defaults to None</span>
+<span class="sd">        :type col_to_transform_mapping: Dict[str, str], optional</span>
+<span class="sd">        :param kw_args: kwargs for the TA function, defaults to None</span>
+<span class="sd">        :type kw_args: dict, optional</span>
+<span class="sd">        :raises TypeError: transformer only works on pandas DataFrames</span>
+<span class="sd">        :raises ValueError: transformer expect certain columns to be available in the dataframe to transform</span>
+<span class="sd">        :return: scikit-learn FunctionTransformer version of the TA function</span>
+<span class="sd">        :rtype: FunctionTransformer</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">ta_func</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_ta_func</span><span class="p">(</span><span class="n">func_name</span><span class="p">)</span>
+
+        <span class="n">args_names_list</span><span class="p">,</span> <span class="n">kwargs_names_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_args_kwargs</span><span class="p">(</span><span class="n">func_name</span><span class="p">)</span>
+
+        <span class="n">args_names_list</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_check_and_set_args</span><span class="p">(</span>
+            <span class="n">func_name</span><span class="p">,</span> <span class="n">args_names_list</span><span class="p">,</span> <span class="n">col_to_transform</span><span class="p">,</span> <span class="n">col_to_transform_mapping</span>
+        <span class="p">)</span>
+
+        <span class="n">kw_args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_check_and_set_kwargs</span><span class="p">(</span><span class="n">func_name</span><span class="p">,</span> <span class="n">kw_args</span><span class="p">,</span> <span class="n">kwargs_names_list</span><span class="p">)</span>
+
+        <span class="k">def</span> <span class="nf">ta_func_transformed</span><span class="p">(</span><span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;X must be a pandas DataFrame, but got type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">X</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">set</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="o">.</span><span class="n">issuperset</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">args_names_list</span><span class="p">)):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Expected the following columns in the dataframe: </span><span class="si">{</span><span class="nb">set</span><span class="p">(</span><span class="n">args_names_list</span><span class="p">)</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">args_names_list</span><span class="p">]</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">ta_func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kw_args</span><span class="p">)</span>
+
+            <span class="c1"># parse output to 2-d arrays to enable concatenating</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+                <span class="n">output</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">values</span>
+
+            <span class="k">if</span> <span class="n">output</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">):</span>
+                    <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">values</span>
+                <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+            <span class="k">return</span> <span class="n">output</span>
+
+        <span class="k">return</span> <span class="n">FunctionTransformer</span><span class="p">(</span><span class="n">ta_func_transformed</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="nf">_check_and_set_args</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">func_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">args_names_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+        <span class="n">col_to_transform</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
+        <span class="n">col_to_transform_mapping</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="kc">None</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Checks and sets the args for the TA function.</span>
+
+<span class="sd">        :param func_name: name of the TA function</span>
+<span class="sd">        :type func_name: str</span>
+<span class="sd">        :param args_names_list: list with valid argument names</span>
+<span class="sd">        :type args_names_list: List[str]</span>
+<span class="sd">        :param col_to_transform: if the TA function takes in an array this will specify which column to transform in</span>
+<span class="sd">                                 the dataframe</span>
+<span class="sd">        :type col_to_transform: Union[str, None]</span>
+<span class="sd">        :param col_to_transform_mapping: maps valid argument names to column names in the dataframe to transform</span>
+<span class="sd">        :type col_to_transform_mapping: Union[str, None]</span>
+<span class="sd">        :raises ValueError: column name to transform is not provided, i.e. transformer does not know which column</span>
+<span class="sd">                            in the dataframe to transform</span>
+<span class="sd">        :raises ValueError: transformer takes in two arrays, so both column need to be specified</span>
+<span class="sd">        :raises TypeError: the column mapping is not a dictionary</span>
+<span class="sd">        :raises ValueError: the mapping contains names that are not valid argument names</span>
+<span class="sd">        :return: list with valid column names to extract from the dataframe to transform</span>
+<span class="sd">        :rtype: List[str]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># ta func takes in an array and transforms it directly</span>
+        <span class="c1"># since X is a DataFrame with multiple columns, it must be</span>
+        <span class="c1"># specified which column is being transformed</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_real</span> <span class="ow">in</span> <span class="n">args_names_list</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">col_to_transform</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;The function </span><span class="si">{</span><span class="n">func_name</span><span class="si">}</span><span class="s2"> requires col_to_transform to be specified.&quot;</span>
+                <span class="p">)</span>
+            <span class="n">idx_real</span> <span class="o">=</span> <span class="n">args_names_list</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_real</span><span class="p">)</span>
+            <span class="n">args_names_list</span><span class="p">[</span><span class="n">idx_real</span><span class="p">]</span> <span class="o">=</span> <span class="n">col_to_transform</span>
+
+        <span class="c1"># functions that take in two arrays need to be specified as a list with two column names</span>
+        <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;real</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span> <span class="ow">in</span> <span class="n">args_names_list</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span>
+                <span class="nb">isinstance</span><span class="p">(</span><span class="n">col_to_transform</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span>
+                <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">col_to_transform</span><span class="p">)</span>
+            <span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Selected function </span><span class="si">{</span><span class="n">func_name</span><span class="si">}</span><span class="s2"> requires two columns to be &quot;</span>
+                    <span class="s2">&quot;specified to apply the transformation on, please provide a list with column names. &quot;</span>
+                <span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">):</span>
+                <span class="n">idx_real</span> <span class="o">=</span> <span class="n">args_names_list</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;real</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">args_names_list</span><span class="p">[</span><span class="n">idx_real</span><span class="p">]</span> <span class="o">=</span> <span class="n">col_to_transform</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="c1"># some expected columns can have different names in the dataframe</span>
+        <span class="c1"># this part will map the expected name in the ta func to the name in the dataframe</span>
+        <span class="k">if</span> <span class="n">col_to_transform_mapping</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">col_to_transform_mapping</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Expected a dictionary for col_to_transform_mapping, but got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">col_to_transform_mapping</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="nb">set</span><span class="p">(</span><span class="n">col_to_transform_mapping</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="o">.</span><span class="n">issubset</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">args_names_list</span><span class="p">)):</span>
+                <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">arg_name_i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">args_names_list</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">arg_name_i</span> <span class="ow">in</span> <span class="n">col_to_transform_mapping</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                        <span class="n">args_names_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">col_to_transform_mapping</span><span class="p">[</span><span class="n">arg_name_i</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;The function </span><span class="si">{</span><span class="n">func_name</span><span class="si">}</span><span class="s2"> does not accept &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">set</span><span class="p">(</span><span class="n">col_to_transform_mapping</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="n">args_names_list</span><span class="p">)</span><span class="si">}</span><span class="s2"> as arguments. &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;The only valid arguments are </span><span class="si">{</span><span class="n">args_names_list</span><span class="si">}</span><span class="s2">.&quot;</span>
+                <span class="p">)</span>
+        <span class="k">return</span> <span class="n">args_names_list</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_check_and_set_kwargs</span><span class="p">(</span>
+        <span class="n">func_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">kw_args</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">any</span><span class="p">]],</span>
+        <span class="n">kwargs_names_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Checks if the provided kwargs for the TA function are valid.</span>
+
+<span class="sd">        :param func_name: name of the TA function</span>
+<span class="sd">        :type func_name: str</span>
+<span class="sd">        :param kw_args: dictionary with kwargs that are being set for the TA function</span>
+<span class="sd">        :type kw_args: Union[None, Dict[str, any]]</span>
+<span class="sd">        :param kwargs_names_list: list with valid kwarg names</span>
+<span class="sd">        :type kwargs_names_list: List[str]</span>
+<span class="sd">        :raises error: if the TA function has no kwargs or kwargs do not exist errors are raised</span>
+<span class="sd">        :raises ValueError: TA function has no kwargs, but kwargs are being set.</span>
+<span class="sd">        :raises ValueError: TA function does not have all the kwargs that are being set.</span>
+<span class="sd">        :return: Dictionary with valid kwargs for the TA function.</span>
+<span class="sd">        :rtype: Dict[str, Any]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># raise error if kwargs are being set, while there are no kwargs or some do not exist</span>
+        <span class="k">if</span> <span class="n">kwargs_names_list</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">kw_args</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Selected function </span><span class="si">{</span><span class="n">func_name</span><span class="si">}</span><span class="s2"> has no key word arguments, but got </span><span class="si">{</span><span class="n">kw_args</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">kwargs_names_list</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">kw_args</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">set</span><span class="p">(</span><span class="n">kw_args</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="o">.</span><span class="n">issubset</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">kwargs_names_list</span><span class="p">)):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;The kwargs </span><span class="si">{</span><span class="nb">set</span><span class="p">(</span><span class="n">kw_args</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="n">kwargs_names_list</span><span class="p">)</span><span class="si">}</span><span class="s2"> are not valid kwargs &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;for the function </span><span class="si">{</span><span class="n">func_name</span><span class="si">}</span><span class="s2">. Valid kwargs are: </span><span class="si">{</span><span class="n">kwargs_names_list</span><span class="si">}</span><span class="s2">.&quot;</span>
+                <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">kw_args</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">kw_args</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">kw_args</span></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">MizarLabs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, MizarAI.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

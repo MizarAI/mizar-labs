@@ -1,0 +1,365 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mizarlabs.transformers.targets.trend_scanning &#8212; MizarLabs 0.1.3 documentation</title>
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../../" src="../../../../_static/documentation_options.js"></script>
+    <script src="../../../../_static/jquery.js"></script>
+    <script src="../../../../_static/underscore.js"></script>
+    <script src="../../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for mizarlabs.transformers.targets.trend_scanning</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Implementation of Trend-Scanning labels described in `Advances in Financial Machine Learning: Lecture 3/10</span>
+<span class="sd">&lt;https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2708678&gt;`_</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Tuple</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Union</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">EVENT_END_TIME</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">LABEL</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">RETURN</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">T_VALUE</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.structural_breaks.sdfc</span> <span class="kn">import</span> <span class="n">get_beta_and_beta_var</span>
+<span class="kn">from</span> <span class="nn">numba</span> <span class="kn">import</span> <span class="n">jit</span>
+<span class="kn">from</span> <span class="nn">numba</span> <span class="kn">import</span> <span class="n">prange</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">BaseEstimator</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">TransformerMixin</span>
+
+
+<div class="viewcode-block" id="TrendScannerLabeling"><a class="viewcode-back" href="../../../../mizarlabs.transformers.targets.html#mizarlabs.transformers.targets.trend_scanning.TrendScannerLabeling">[docs]</a><span class="k">class</span> <span class="nc">TrendScannerLabeling</span><span class="p">(</span><span class="n">BaseEstimator</span><span class="p">,</span> <span class="n">TransformerMixin</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    `Trend scanning &lt;https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3257419&gt;`_ is both a classification and</span>
+<span class="sd">    regression labeling technique.</span>
+<span class="sd">    That can be used in the following ways:</span>
+<span class="sd">    1. Classification: By taking the sign of t-value for a given observation we can set {-1, 1} labels to define the</span>
+<span class="sd">       trends as either downward or upward.</span>
+<span class="sd">    2. Classification: By adding a minimum t-value threshold you can generate {-1, 0, 1} labels for downward, no-trend,</span>
+<span class="sd">       upward.</span>
+<span class="sd">    3. The t-values can be used as sample weights in classification problems.</span>
+<span class="sd">    4. Regression: The t-values can be used in a regression setting to determine the magnitude of the trend.</span>
+<span class="sd">    The output of this algorithm is a DataFrame with t1 (time stamp for the farthest observation), t-value, returns for</span>
+<span class="sd">    the trend, and bin.</span>
+<span class="sd">    :param t_events: filtered events, array/list of pd.Timestamps, defaults to None</span>
+<span class="sd">    :type t_events: Union[np.ndarray, list, None], optional</span>
+<span class="sd">    :param look_forward_window: maximum look forward window used to get the trend value, defaults to 20</span>
+<span class="sd">    :type look_forward_window: int, optional</span>
+<span class="sd">    :param min_sample_length: minimum sample length used to fit regression, defaults to 5</span>
+<span class="sd">    :type min_sample_length: int, optional</span>
+<span class="sd">    :param step: optimal t-value index is searched every &#39;step&#39; indices, defaults to 1</span>
+<span class="sd">    :type step: int, optional</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">t_events</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="nb">list</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">look_forward_window</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+        <span class="n">min_sample_length</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span>
+        <span class="n">step</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="k">assert</span> <span class="n">min_sample_length</span> <span class="o">&lt;</span> <span class="n">look_forward_window</span><span class="p">,</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;look_forward_window is </span><span class="si">{</span><span class="n">look_forward_window</span><span class="si">}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;and should be larger than min_sample_length </span><span class="si">{</span><span class="n">min_sample_length</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">t_events</span> <span class="o">=</span> <span class="n">t_events</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">look_forward_window</span> <span class="o">=</span> <span class="n">look_forward_window</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">min_sample_length</span> <span class="o">=</span> <span class="n">min_sample_length</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">step</span> <span class="o">=</span> <span class="n">step</span>
+
+<div class="viewcode-block" id="TrendScannerLabeling.fit"><a class="viewcode-back" href="../../../../mizarlabs.transformers.targets.html#mizarlabs.transformers.targets.trend_scanning.TrendScannerLabeling.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+    <span class="k">def</span> <span class="nf">_check_input</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_series</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span>
+            <span class="n">input_series</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span>
+        <span class="p">),</span> <span class="s2">&quot;Please provide only a Pandas series with close prices with datetime indices.&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">t_events</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">input_series</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">values</span><span class="p">)</span><span class="o">.</span><span class="n">issuperset</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t_events</span><span class="p">)),</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;The following time indices are in t_events but &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;not in the provided series &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">set</span><span class="p">(</span><span class="n">input_series</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">values</span><span class="p">)</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t_events</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_check_output</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+        <span class="n">required_columns</span> <span class="o">=</span> <span class="p">[</span><span class="n">EVENT_END_TIME</span><span class="p">,</span> <span class="n">T_VALUE</span><span class="p">,</span> <span class="n">RETURN</span><span class="p">,</span> <span class="n">LABEL</span><span class="p">]</span>
+
+        <span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">required_columns</span><span class="p">)</span> <span class="o">==</span> <span class="nb">set</span><span class="p">(</span>
+            <span class="n">output_df</span><span class="o">.</span><span class="n">columns</span>
+        <span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;Missing </span><span class="si">{</span><span class="nb">set</span><span class="p">(</span><span class="n">required_columns</span><span class="p">)</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="n">output_df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span><span class="si">}</span><span class="s2"> in output DataFrame.&quot;</span>
+        <span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t_events</span><span class="p">)</span> <span class="o">==</span> <span class="nb">set</span><span class="p">(</span>
+            <span class="n">output_df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">values</span>
+        <span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;Missing following time indices in output DataFrame: </span><span class="si">{</span><span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t_events</span><span class="p">)</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="n">output_df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+
+<div class="viewcode-block" id="TrendScannerLabeling.transform"><a class="viewcode-back" href="../../../../mizarlabs.transformers.targets.html#mizarlabs.transformers.targets.trend_scanning.TrendScannerLabeling.transform">[docs]</a>    <span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Scans for trends in the provided series and provides</span>
+<span class="sd">        a DataFrame with results.</span>
+
+<span class="sd">        DataFrame contains the start_time, event_end_time, t_value,</span>
+<span class="sd">        return and label.</span>
+
+<span class="sd">        :param y: series used to label the data set</span>
+<span class="sd">        :type y: pd.Series</span>
+<span class="sd">        :return: DataFrame with as index the start time and</span>
+<span class="sd">                 in the columns the event_end_time, t_value, return and</span>
+<span class="sd">                 label.</span>
+<span class="sd">        :rtype: pd.DataFrame</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_input</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_transform</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_output</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">df</span></div>
+
+    <span class="k">def</span> <span class="nf">_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;Scans for trends in the provided series and provides</span>
+<span class="sd">        a DataFrame with results.</span>
+
+<span class="sd">        DataFrame contains the start_time, event_end_time, t_value,</span>
+<span class="sd">        return and label.</span>
+
+<span class="sd">        :param y: series used to label the data set</span>
+<span class="sd">        :type y: pd.Series</span>
+<span class="sd">        :return: DataFrame with as index the start time and</span>
+<span class="sd">                 in the columns the event_end_time, t_value, return and</span>
+<span class="sd">                 label.</span>
+<span class="sd">        :rtype: pd.DataFrame</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># check if only subset of indices is looped over</span>
+        <span class="c1"># else scan every index</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">t_events</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">t_events</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">values</span>
+
+        <span class="c1"># get t values and end indices per index</span>
+        <span class="n">t_values_array</span><span class="p">,</span> <span class="n">end_indices_array</span> <span class="o">=</span> <span class="n">_trend_scan_each_index</span><span class="p">(</span>
+            <span class="n">y_array</span><span class="o">=</span><span class="n">y</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">),</span>
+            <span class="n">indices</span><span class="o">=</span><span class="n">y</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">get_indexer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">t_events</span><span class="p">),</span>
+            <span class="n">min_sample_length</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">min_sample_length</span><span class="p">,</span>
+            <span class="n">look_forward_window</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">look_forward_window</span><span class="p">,</span>
+            <span class="n">step</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">step</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># convert end indices into datetime</span>
+        <span class="n">event_end_times_array</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">y</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">i</span><span class="p">)]</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">else</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">end_indices_array</span>
+        <span class="p">]</span>
+
+        <span class="c1"># cast results into dataframe and compute the returns and the sign of the return</span>
+        <span class="n">labels</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+            <span class="p">{</span><span class="n">EVENT_END_TIME</span><span class="p">:</span> <span class="n">event_end_times_array</span><span class="p">,</span> <span class="n">T_VALUE</span><span class="p">:</span> <span class="n">t_values_array</span><span class="p">},</span>
+            <span class="n">index</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">t_events</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">non_nan_labels</span> <span class="o">=</span> <span class="n">labels</span><span class="p">[</span><span class="n">EVENT_END_TIME</span><span class="p">]</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span>
+        <span class="n">labels</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">non_nan_labels</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">RETURN</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">y</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">non_nan_labels</span><span class="p">]</span><span class="o">.</span><span class="n">values</span> <span class="o">/</span> <span class="n">y</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">non_nan_labels</span><span class="o">.</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">values</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="p">)</span>
+        <span class="n">labels</span><span class="p">[</span><span class="n">LABEL</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">t_value</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">labels</span></div>
+
+
+<span class="nd">@jit</span><span class="p">(</span><span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nopython</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">_trend_scan_each_index</span><span class="p">(</span>
+    <span class="n">y_array</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">indices</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">min_sample_length</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">look_forward_window</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">step</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Scans for the trend in the index.</span>
+
+<span class="sd">    :param look_forward_window: maximum look forward window used to get the trend value, defaults to 20</span>
+<span class="sd">    :type look_forward_window: int, optional</span>
+<span class="sd">    :param min_sample_length: minimum sample length used to fit regression, defaults to 5</span>
+<span class="sd">    :type min_sample_length: int, optional</span>
+<span class="sd">    :param step: optimal t-value index is searched every &#39;step&#39; indices, defaults to 1</span>
+<span class="sd">    :type step: int, optional</span>
+
+<span class="sd">    :param y_array: series to trend scan</span>
+<span class="sd">    :type y_array: np.ndarray</span>
+<span class="sd">    :param indices: indices in the series to scan</span>
+<span class="sd">    :type indices: np.ndarray</span>
+<span class="sd">    :param min_sample_length: minimum sample length used to fit regression</span>
+<span class="sd">    :type min_sample_length: int</span>
+<span class="sd">    :param look_forward_window: maximum look forward window used to get the trend value</span>
+<span class="sd">    :type look_forward_window: int</span>
+<span class="sd">    :param step: optimal t-value index is searched every &#39;step&#39; indices</span>
+<span class="sd">    :type step: int</span>
+<span class="sd">    :return: Tuple with the max t-values and their respective location in the series</span>
+<span class="sd">    :rtype: Tuple[np.ndarray, np.ndarray]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># array to save the end time index values</span>
+    <span class="n">end_indices_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+    <span class="c1"># array to save the t values per index</span>
+    <span class="n">t_values_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+    <span class="c1"># iterate over each index in t_events</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">prange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)):</span>
+        <span class="n">index</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="c1"># select a subset of the series of interest based on forward looking window</span>
+        <span class="n">y_subset</span> <span class="o">=</span> <span class="n">y_array</span><span class="p">[</span><span class="n">index</span> <span class="p">:</span> <span class="p">(</span><span class="n">index</span> <span class="o">+</span> <span class="n">look_forward_window</span><span class="p">)]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+        <span class="c1"># check if sufficient data else set values to NaN</span>
+        <span class="k">if</span> <span class="n">y_subset</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">look_forward_window</span><span class="p">:</span>
+
+            <span class="c1"># compute max t value and its index location in the subset of y</span>
+            <span class="p">(</span>
+                <span class="n">t_values_array</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                <span class="n">index_max_t_value</span><span class="p">,</span>
+            <span class="p">)</span> <span class="o">=</span> <span class="n">_get_t_val_and_event_end_time_index_at_index</span><span class="p">(</span>
+                <span class="n">y_subset</span><span class="p">,</span> <span class="n">min_sample_length</span><span class="p">,</span> <span class="n">step</span>
+            <span class="p">)</span>
+
+            <span class="c1"># convert index location to index in whole of y</span>
+            <span class="n">end_indices_array</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">index</span> <span class="o">+</span> <span class="n">index_max_t_value</span> <span class="o">+</span> <span class="n">min_sample_length</span> <span class="o">-</span> <span class="mi">1</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">end_indices_array</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+            <span class="n">t_values_array</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+    <span class="k">return</span> <span class="n">t_values_array</span><span class="p">,</span> <span class="n">end_indices_array</span>
+
+
+<span class="nd">@jit</span><span class="p">(</span><span class="n">nopython</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">_get_t_val_and_event_end_time_index_at_index</span><span class="p">(</span>
+    <span class="n">y_subset</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">min_sample_length</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">step</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;Returns the maximum t-value and its index location.</span>
+
+<span class="sd">    Loop over possible look-ahead windows to get the one</span>
+<span class="sd">    which yields maximum t values for b_1 regression coef</span>
+
+<span class="sd">    :param y_subset: series being trend scanned</span>
+<span class="sd">    :type y_subset: np.ndarray</span>
+<span class="sd">    :param min_sample_length: minimum sample length used to fit regression</span>
+<span class="sd">    :type min_sample_length: int</span>
+<span class="sd">    :param step: optimal t-value index is searched every &#39;step&#39; indices</span>
+<span class="sd">    :type step: int</span>
+<span class="sd">    :return: tuple with max t-value and its index location</span>
+<span class="sd">    :rtype: Tuple[np.float64, np.float64]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># init array to stores t values in</span>
+    <span class="n">t_values_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">y_subset</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">min_sample_length</span><span class="p">)</span>
+
+    <span class="c1"># expand forward looking window, compute and store t value, keeping into account</span>
+    <span class="c1"># the min_sample_length and the stepsize</span>
+    <span class="k">for</span> <span class="n">forward_window</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">min_sample_length</span><span class="p">,</span> <span class="n">y_subset</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">step</span><span class="p">):</span>
+        <span class="c1"># y{t}:y_{t+l}</span>
+        <span class="n">y_subset_forward_window</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span>
+            <span class="n">y_subset</span><span class="p">[:</span><span class="n">forward_window</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Array of [1, 0], [1, 1], [1, 2], ... [1, l] # b_0, b_1 coefficients</span>
+        <span class="n">X_constant</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">y_subset_forward_window</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+        <span class="n">X_trend</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">y_subset_forward_window</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">X_subset_forward_window</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">X_constant</span><span class="p">,</span> <span class="n">X_trend</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="c1"># get OLS estimates</span>
+        <span class="n">b_mean_</span><span class="p">,</span> <span class="n">b_var_</span> <span class="o">=</span> <span class="n">get_beta_and_beta_var</span><span class="p">(</span>
+            <span class="n">X_subset_forward_window</span><span class="p">,</span> <span class="n">y_subset_forward_window</span>
+        <span class="p">)</span>
+
+        <span class="c1"># compute t value for trend coefficient</span>
+        <span class="n">t_values_array</span><span class="p">[</span><span class="n">forward_window</span> <span class="o">-</span> <span class="n">min_sample_length</span><span class="p">]</span> <span class="o">=</span> <span class="n">b_mean_</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span>
+            <span class="n">b_var_</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="p">)</span>
+
+    <span class="c1"># identify max abs t-value and its location</span>
+    <span class="n">index_max_t_value</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">t_values_array</span><span class="p">))</span>
+    <span class="n">max_t_value</span> <span class="o">=</span> <span class="n">t_values_array</span><span class="p">[</span><span class="n">index_max_t_value</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">max_t_value</span><span class="p">,</span> <span class="n">index_max_t_value</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">MizarLabs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, MizarAI.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
