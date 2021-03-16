@@ -1,0 +1,319 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mizarlabs.transformers.targets package &#8212; MizarLabs 0.1.3 documentation</title>
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="mizarlabs-transformers-targets-package">
+<h1>mizarlabs.transformers.targets package<a class="headerlink" href="#mizarlabs-transformers-targets-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-mizarlabs.transformers.targets.labeling">
+<span id="mizarlabs-transformers-targets-labeling-module"></span><h2>mizarlabs.transformers.targets.labeling module<a class="headerlink" href="#module-mizarlabs.transformers.targets.labeling" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="mizarlabs.transformers.targets.labeling.BaseLabeling">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.targets.labeling.</span></code><code class="sig-name descname"><span class="pre">BaseLabeling</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_expiration_bars</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/targets/labeling.html#BaseLabeling"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.targets.labeling.BaseLabeling" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.BaseEstimator</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.TransformerMixin</span></code></p>
+<p>Base class for labeling.</p>
+<dl class="py method">
+<dt id="mizarlabs.transformers.targets.labeling.BaseLabeling.fit">
+<code class="sig-name descname"><span class="pre">fit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/targets/labeling.html#BaseLabeling.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.targets.labeling.BaseLabeling.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fit the model (just for sklearn compatibility).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> – </p></li>
+<li><p><strong>y</strong> – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="mizarlabs.transformers.targets.labeling.BaseLabeling.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">pandas.core.frame.DataFrame</span><a class="reference internal" href="_modules/mizarlabs/transformers/targets/labeling.html#BaseLabeling.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.targets.labeling.BaseLabeling.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a dataframe with the target labelled.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>y</strong> – </p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="mizarlabs.transformers.targets.labeling.TripleBarrierMethodLabeling">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.targets.labeling.</span></code><code class="sig-name descname"><span class="pre">TripleBarrierMethodLabeling</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_expiration_bars</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">profit_taking_factor</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_loss_factor</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metalabeling</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">close_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'close'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">side_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'side'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">volatility_window</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expiration_label</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/targets/labeling.html#TripleBarrierMethodLabeling"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.targets.labeling.TripleBarrierMethodLabeling" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#mizarlabs.transformers.targets.labeling.BaseLabeling" title="mizarlabs.transformers.targets.labeling.BaseLabeling"><code class="xref py py-class docutils literal notranslate"><span class="pre">mizarlabs.transformers.targets.labeling.BaseLabeling</span></code></a></p>
+<p>Implements the triple barrier method used to label the target.</p>
+<p>See page 45 of Advances in Financial Machine Learning by Marcos Lopez de Prado
+for additional information.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>num_expiration_bars</strong> (<em>int</em>) – Max number of bars from the position taking to the position closing.</p></li>
+<li><p><strong>profit_taking_factor</strong> (<em>float</em>) – The factor that multiplies the volatility for
+the creation of the horizontal upper barrier</p></li>
+<li><p><strong>stop_loss_factor</strong> (<em>float</em>) – The factor that multiplies the volatility for the
+creation of the horizontal lower barrier</p></li>
+<li><p><strong>metalabeling</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether metalabeling is activated</p></li>
+<li><p><strong>close_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the close column</p></li>
+<li><p><strong>side_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the side column (metalabeling)</p></li>
+<li><p><strong>volatility_window</strong> (<em>int</em><em>, </em><em>optional</em>) – The number of bars used for the volatility calculation</p></li>
+<li><p><strong>expiration_label</strong> (<em>bool</em><em>, </em><em>optional</em>) – Labels with 0 are returned to indicate expiration / vertical barrier has been hit</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="mizarlabs.transformers.targets.labeling.TripleBarrierMethodLabeling.fit">
+<code class="sig-name descname"><span class="pre">fit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">fit_params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/targets/labeling.html#TripleBarrierMethodLabeling.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.targets.labeling.TripleBarrierMethodLabeling.fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fit the model (just for sklearn compatibility).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> – </p></li>
+<li><p><strong>y</strong> – </p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt id="mizarlabs.transformers.targets.labeling.get_daily_vol">
+<code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.targets.labeling.</span></code><code class="sig-name descname"><span class="pre">get_daily_vol</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">close</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.series.Series</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ewm_span</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">100</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">pandas.core.series.Series</span><a class="reference internal" href="_modules/mizarlabs/transformers/targets/labeling.html#get_daily_vol"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.targets.labeling.get_daily_vol" title="Permalink to this definition">¶</a></dt>
+<dd><p>Estimate the daily volatility.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>close</strong> (<em>pd.Series</em>) – Contains the close price</p></li>
+<li><p><strong>ewm_span</strong> (<em>int</em>) – The span of the standard deviation</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The daily volatility per each bar</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>pd.Series</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="mizarlabs.transformers.targets.labeling.get_labels">
+<code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.targets.labeling.</span></code><code class="sig-name descname"><span class="pre">get_labels</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">barriers_df</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">barriers_info_df</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">close</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.series.Series</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metalabeling</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expiration_label</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">pandas.core.frame.DataFrame</span><a class="reference internal" href="_modules/mizarlabs/transformers/targets/labeling.html#get_labels"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.targets.labeling.get_labels" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate returns and assign return classes based on the first touched bar.</p>
+<p>Case 1: (‘side’ not in barriers_info_df): bin in (-1,1) &lt;-label by price action
+Case 2: (‘side’ in barriers_info_df): bin in (0,1) &lt;-label by pnl (meta-labeling)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>barriers_df</strong> (<em>pd.DataFrame</em>) – dataframe with datetime when barriers are hit</p></li>
+<li><p><strong>barriers_info_df</strong> (<em>pd.DataFrame</em>) – Info for creating the barriers</p></li>
+<li><p><strong>close</strong> (<em>pd.Series</em>) – Series of prices.</p></li>
+<li><p><strong>metalabeling</strong> (<em>bool</em>) – Whether or not metalabelign is activated</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Dataframe containing event</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="mizarlabs.transformers.targets.labeling.triple_barrier_labeling">
+<code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.targets.labeling.</span></code><code class="sig-name descname"><span class="pre">triple_barrier_labeling</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">close</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.series.Series</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">barrier_info_df</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">profit_taking_factor</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_loss_factor</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">float</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">pandas.core.frame.DataFrame</span><a class="reference internal" href="_modules/mizarlabs/transformers/targets/labeling.html#triple_barrier_labeling"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.targets.labeling.triple_barrier_labeling" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate the first hit on the stop loss and profit taking barrier.</p>
+<p>As described in Advances in financial machine learning,
+Marcos Lopez de Prado, 2018.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>close</strong> (<em>pd.Series</em>) – Series of prices.</p></li>
+<li><p><strong>barrier_info_df</strong> (<em>pd.DataFrame</em>) – Info for creating the barriers</p></li>
+<li><p><strong>profit_taking_factor</strong> (<em>float</em>) – The factor that multiplies the volatility for
+the creation of the horizontal upper barrier</p></li>
+<li><p><strong>stop_loss_factor</strong> (<em>float</em>) – The factor that multiplies the volatility for the
+creation of the horizontal lower barrier</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Dataframe containing the first hit for each of the barriers</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-mizarlabs.transformers.targets.trend_scanning">
+<span id="mizarlabs-transformers-targets-trend-scanning-module"></span><h2>mizarlabs.transformers.targets.trend_scanning module<a class="headerlink" href="#module-mizarlabs.transformers.targets.trend_scanning" title="Permalink to this headline">¶</a></h2>
+<p>Implementation of Trend-Scanning labels described in <a class="reference external" href="https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2708678">Advances in Financial Machine Learning: Lecture 3/10</a></p>
+<dl class="py class">
+<dt id="mizarlabs.transformers.targets.trend_scanning.TrendScannerLabeling">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.targets.trend_scanning.</span></code><code class="sig-name descname"><span class="pre">TrendScannerLabeling</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">t_events</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">,</span> </span><span class="pre">list</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">look_forward_window</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_sample_length</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/targets/trend_scanning.html#TrendScannerLabeling"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.targets.trend_scanning.TrendScannerLabeling" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.BaseEstimator</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.TransformerMixin</span></code></p>
+<p><a class="reference external" href="https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3257419">Trend scanning</a> is both a classification and
+regression labeling technique.
+That can be used in the following ways:
+1. Classification: By taking the sign of t-value for a given observation we can set {-1, 1} labels to define the</p>
+<blockquote>
+<div><p>trends as either downward or upward.</p>
+</div></blockquote>
+<ol class="arabic simple" start="2">
+<li><p>Classification: By adding a minimum t-value threshold you can generate {-1, 0, 1} labels for downward, no-trend,
+upward.</p></li>
+<li><p>The t-values can be used as sample weights in classification problems.</p></li>
+</ol>
+<p>4. Regression: The t-values can be used in a regression setting to determine the magnitude of the trend.
+The output of this algorithm is a DataFrame with t1 (time stamp for the farthest observation), t-value, returns for
+the trend, and bin.
+:param t_events: filtered events, array/list of pd.Timestamps, defaults to None
+:type t_events: Union[np.ndarray, list, None], optional
+:param look_forward_window: maximum look forward window used to get the trend value, defaults to 20
+:type look_forward_window: int, optional
+:param min_sample_length: minimum sample length used to fit regression, defaults to 5
+:type min_sample_length: int, optional
+:param step: optimal t-value index is searched every ‘step’ indices, defaults to 1
+:type step: int, optional</p>
+<dl class="py method">
+<dt id="mizarlabs.transformers.targets.trend_scanning.TrendScannerLabeling.fit">
+<code class="sig-name descname"><span class="pre">fit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/targets/trend_scanning.html#TrendScannerLabeling.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.targets.trend_scanning.TrendScannerLabeling.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="mizarlabs.transformers.targets.trend_scanning.TrendScannerLabeling.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.series.Series</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">pandas.core.frame.DataFrame</span><a class="reference internal" href="_modules/mizarlabs/transformers/targets/trend_scanning.html#TrendScannerLabeling.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.targets.trend_scanning.TrendScannerLabeling.transform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Scans for trends in the provided series and provides
+a DataFrame with results.</p>
+<p>DataFrame contains the start_time, event_end_time, t_value,
+return and label.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>y</strong> (<em>pd.Series</em>) – series used to label the data set</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>DataFrame with as index the start time and
+in the columns the event_end_time, t_value, return and
+label.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-mizarlabs.transformers.targets">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-mizarlabs.transformers.targets" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">MizarLabs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, MizarAI.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/mizarlabs.transformers.targets.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

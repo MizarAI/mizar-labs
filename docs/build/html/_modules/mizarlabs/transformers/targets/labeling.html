@@ -1,0 +1,553 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mizarlabs.transformers.targets.labeling &#8212; MizarLabs 0.1.3 documentation</title>
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../../" src="../../../../_static/documentation_options.js"></script>
+    <script src="../../../../_static/jquery.js"></script>
+    <script src="../../../../_static/underscore.js"></script>
+    <script src="../../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for mizarlabs.transformers.targets.labeling</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">abc</span> <span class="kn">import</span> <span class="n">abstractmethod</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Tuple</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">numba</span> <span class="kn">import</span> <span class="n">jit</span>
+<span class="kn">from</span> <span class="nn">numba</span> <span class="kn">import</span> <span class="n">prange</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">BaseEstimator</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">TransformerMixin</span>
+
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">CLOSE</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">DAILY_VOL</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">EVENT_END_TIME</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">LABEL</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">PROFIT_TAKING</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">RETURN</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">SIDE</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">STOP_LOSS</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.static</span> <span class="kn">import</span> <span class="n">TIMESTAMP_UNIT</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.transformers.utils</span> <span class="kn">import</span> <span class="n">check_missing_columns</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.transformers.utils</span> <span class="kn">import</span> <span class="n">convert_to_timestamp</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;BaseLabeling&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TripleBarrierMethodLabeling&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;triple_barrier_labeling&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;get_labels&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;get_daily_vol&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+
+
+<div class="viewcode-block" id="BaseLabeling"><a class="viewcode-back" href="../../../../mizarlabs.transformers.targets.html#mizarlabs.transformers.targets.labeling.BaseLabeling">[docs]</a><span class="k">class</span> <span class="nc">BaseLabeling</span><span class="p">(</span><span class="n">BaseEstimator</span><span class="p">,</span> <span class="n">TransformerMixin</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Base class for labeling.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n_expiration_bars</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n_expiration_bars</span> <span class="o">=</span> <span class="n">n_expiration_bars</span>
+
+<div class="viewcode-block" id="BaseLabeling.fit"><a class="viewcode-back" href="../../../../mizarlabs.transformers.targets.html#mizarlabs.transformers.targets.labeling.BaseLabeling.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Fit the model (just for sklearn compatibility).</span>
+
+<span class="sd">        :param x:</span>
+<span class="sd">        :param y:</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="BaseLabeling.transform"><a class="viewcode-back" href="../../../../mizarlabs.transformers.targets.html#mizarlabs.transformers.targets.labeling.BaseLabeling.transform">[docs]</a>    <span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return a dataframe with the target labelled.</span>
+
+<span class="sd">        :param y:</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_input</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_transform</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_output</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">output</span></div>
+
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">_check_output</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">_check_input</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_series</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span> <span class="nf">_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="k">pass</span></div>
+
+
+<span class="c1"># TODO: think about a triple barrier labeling with no</span>
+<span class="c1">#  volatility adjustment</span>
+<div class="viewcode-block" id="TripleBarrierMethodLabeling"><a class="viewcode-back" href="../../../../mizarlabs.transformers.targets.html#mizarlabs.transformers.targets.labeling.TripleBarrierMethodLabeling">[docs]</a><span class="k">class</span> <span class="nc">TripleBarrierMethodLabeling</span><span class="p">(</span><span class="n">BaseLabeling</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Implements the triple barrier method used to label the target.</span>
+
+<span class="sd">    See page 45 of Advances in Financial Machine Learning by Marcos Lopez de Prado</span>
+<span class="sd">    for additional information.</span>
+
+<span class="sd">    :param num_expiration_bars: Max number of bars from the position taking to the position closing.</span>
+<span class="sd">    :type num_expiration_bars: int</span>
+<span class="sd">    :param profit_taking_factor: The factor that multiplies the volatility for</span>
+<span class="sd">        the creation of the horizontal upper barrier</span>
+<span class="sd">    :type profit_taking_factor: float</span>
+<span class="sd">    :param stop_loss_factor: The factor that multiplies the volatility for the</span>
+<span class="sd">        creation of the horizontal lower barrier</span>
+<span class="sd">    :type stop_loss_factor: float</span>
+<span class="sd">    :param metalabeling: Whether metalabeling is activated</span>
+<span class="sd">    :type metalabeling: bool, optional</span>
+<span class="sd">    :param close_column_name: The name of the close column</span>
+<span class="sd">    :type close_column_name: str, optional</span>
+<span class="sd">    :param side_column_name: The name of the side column (metalabeling)</span>
+<span class="sd">    :type side_column_name: str, optional</span>
+<span class="sd">    :param volatility_window: The number of bars used for the volatility calculation</span>
+<span class="sd">    :type volatility_window: int, optional</span>
+<span class="sd">    :param expiration_label: Labels with 0 are returned to indicate expiration / vertical barrier has been hit</span>
+<span class="sd">    :type expiration_label: bool, optional</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">num_expiration_bars</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">profit_taking_factor</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">stop_loss_factor</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">metalabeling</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">close_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">CLOSE</span><span class="p">,</span>
+        <span class="n">side_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">SIDE</span><span class="p">,</span>
+        <span class="n">volatility_window</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
+        <span class="n">expiration_label</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">num_expiration_bars</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">profit_taking_factor</span> <span class="o">=</span> <span class="n">profit_taking_factor</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop_loss_factor</span> <span class="o">=</span> <span class="n">stop_loss_factor</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling</span> <span class="o">=</span> <span class="n">metalabeling</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">close_column_name</span> <span class="o">=</span> <span class="n">close_column_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">side_column_name</span> <span class="o">=</span> <span class="n">side_column_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">volatility_window</span> <span class="o">=</span> <span class="n">volatility_window</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">expiration_label</span> <span class="o">=</span> <span class="n">expiration_label</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">side_column_name</span>
+            <span class="p">),</span> <span class="s2">&quot;Need to to set side_column_name when meta-labeling is selected&quot;</span>
+
+<div class="viewcode-block" id="TripleBarrierMethodLabeling.fit"><a class="viewcode-back" href="../../../../mizarlabs.transformers.targets.html#mizarlabs.transformers.targets.labeling.TripleBarrierMethodLabeling.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">fit_params</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+    <span class="k">def</span> <span class="nf">_check_output</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">output_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+        <span class="n">check_missing_columns</span><span class="p">(</span><span class="n">output_df</span><span class="p">,</span> <span class="p">[</span><span class="n">EVENT_END_TIME</span><span class="p">,</span> <span class="n">DAILY_VOL</span><span class="p">,</span> <span class="n">RETURN</span><span class="p">,</span> <span class="n">LABEL</span><span class="p">])</span>
+
+    <span class="k">def</span> <span class="nf">_check_input</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metalabeling</span><span class="p">:</span>
+            <span class="n">check_missing_columns</span><span class="p">(</span>
+                <span class="n">input_df</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">close_column_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">side_column_name</span><span class="p">]</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">check_missing_columns</span><span class="p">(</span><span class="n">input_df</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">close_column_name</span><span class="p">])</span>
+
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">input_df</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">),</span> <span class="p">(</span>
+            <span class="s2">&quot;Please provide only a Pandas dataframe with close prices and&quot;</span>
+            <span class="s2">&quot; side (in case of metalabeling) with datetime indices.&quot;</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return a dataframe with the target labelled.</span>
+
+<span class="sd">        :param y: The dataframe with the close and side</span>
+<span class="sd">        :type y: pd.DataFrame</span>
+<span class="sd">        :return: Dataframe containing labeled target</span>
+<span class="sd">        :rtype: pd.DataFrame</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">barriers_info_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">y</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+
+        <span class="n">barriers_info_df</span><span class="p">[</span><span class="n">EVENT_END_TIME</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">barriers_info_df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span><span class="o">.</span><span class="n">shift</span><span class="p">(</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">n_expiration_bars</span><span class="p">)</span><span class="o">.</span><span class="n">values</span>
+        <span class="p">)</span>
+
+        <span class="n">barriers_info_df</span><span class="p">[</span><span class="n">DAILY_VOL</span><span class="p">]</span> <span class="o">=</span> <span class="n">get_daily_vol</span><span class="p">(</span>
+            <span class="n">y</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">close_column_name</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">volatility_window</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">SIDE</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">y</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+            <span class="n">barriers_info_df</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">side_column_name</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">barriers_info_df</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">side_column_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">y</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">side_column_name</span><span class="p">]</span>
+
+        <span class="n">barriers_df</span> <span class="o">=</span> <span class="n">triple_barrier_labeling</span><span class="p">(</span>
+            <span class="n">close</span><span class="o">=</span><span class="n">y</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">close_column_name</span><span class="p">],</span>
+            <span class="n">barrier_info_df</span><span class="o">=</span><span class="n">barriers_info_df</span><span class="p">,</span>
+            <span class="n">profit_taking_factor</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">profit_taking_factor</span><span class="p">,</span>
+            <span class="n">stop_loss_factor</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">stop_loss_factor</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">barriers_info_df</span><span class="p">[</span><span class="n">EVENT_END_TIME</span><span class="p">]</span> <span class="o">=</span> <span class="n">barriers_df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">how</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">bins</span> <span class="o">=</span> <span class="n">get_labels</span><span class="p">(</span>
+            <span class="n">barriers_df</span><span class="p">,</span>
+            <span class="n">barriers_info_df</span><span class="p">,</span>
+            <span class="n">y</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">close_column_name</span><span class="p">],</span>
+            <span class="n">metalabeling</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">metalabeling</span><span class="p">,</span>
+            <span class="n">expiration_label</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">expiration_label</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">barriers_info_df</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">SIDE</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="n">output_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span>
+            <span class="n">barriers_info_df</span><span class="p">[[</span><span class="n">EVENT_END_TIME</span><span class="p">,</span> <span class="n">DAILY_VOL</span><span class="p">]],</span>
+            <span class="n">bins</span><span class="p">,</span>
+            <span class="n">left_index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">right_index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">output_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">output_df</span><span class="p">[</span><span class="n">DAILY_VOL</span><span class="p">]</span><span class="o">.</span><span class="n">isna</span><span class="p">(),</span> <span class="n">EVENT_END_TIME</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">NaT</span>
+        <span class="n">output_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">output_df</span><span class="p">[</span><span class="n">DAILY_VOL</span><span class="p">]</span><span class="o">.</span><span class="n">isna</span><span class="p">(),</span> <span class="n">RETURN</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+        <span class="n">output_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">output_df</span><span class="p">[</span><span class="n">DAILY_VOL</span><span class="p">]</span><span class="o">.</span><span class="n">isna</span><span class="p">(),</span> <span class="n">LABEL</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+        <span class="k">return</span> <span class="n">output_df</span></div>
+
+
+<div class="viewcode-block" id="triple_barrier_labeling"><a class="viewcode-back" href="../../../../mizarlabs.transformers.targets.html#mizarlabs.transformers.targets.labeling.triple_barrier_labeling">[docs]</a><span class="k">def</span> <span class="nf">triple_barrier_labeling</span><span class="p">(</span>
+    <span class="n">close</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+    <span class="n">barrier_info_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="n">profit_taking_factor</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">stop_loss_factor</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Calculate the first hit on the stop loss and profit taking barrier.</span>
+
+<span class="sd">    As described in Advances in financial machine learning,</span>
+<span class="sd">    Marcos Lopez de Prado, 2018.</span>
+
+<span class="sd">    :param close: Series of prices.</span>
+<span class="sd">    :type close: pd.Series</span>
+<span class="sd">    :param barrier_info_df: Info for creating the barriers</span>
+<span class="sd">    :type barrier_info_df: pd.DataFrame</span>
+<span class="sd">    :param profit_taking_factor: The factor that multiplies the volatility for</span>
+<span class="sd">        the creation of the horizontal upper barrier</span>
+<span class="sd">    :type profit_taking_factor: float</span>
+<span class="sd">    :param stop_loss_factor: The factor that multiplies the volatility for the</span>
+<span class="sd">        creation of the horizontal lower barrier</span>
+<span class="sd">    :type stop_loss_factor: float</span>
+<span class="sd">    :return: Dataframe containing the first hit for each of the barriers</span>
+<span class="sd">    :rtype: pd.DataFrame</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">check_missing_columns</span><span class="p">(</span><span class="n">barrier_info_df</span><span class="p">,</span> <span class="p">[</span><span class="n">EVENT_END_TIME</span><span class="p">,</span> <span class="n">DAILY_VOL</span><span class="p">,</span> <span class="n">SIDE</span><span class="p">])</span>
+
+    <span class="k">if</span> <span class="n">profit_taking_factor</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">stop_loss_factor</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Stop loss and profit taking factors should be greater than 0&quot;</span><span class="p">)</span>
+
+    <span class="n">barriers_df</span> <span class="o">=</span> <span class="n">barrier_info_df</span><span class="p">[[</span><span class="n">EVENT_END_TIME</span><span class="p">]]</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">deep</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Creating the profit taking barriers. If the profit taking factor is 0</span>
+    <span class="c1"># then there won&#39;t be any profit taking barriers.</span>
+    <span class="k">if</span> <span class="n">profit_taking_factor</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">profit_taking_barriers</span> <span class="o">=</span> <span class="n">profit_taking_factor</span> <span class="o">*</span> <span class="n">barrier_info_df</span><span class="p">[</span><span class="n">DAILY_VOL</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">profit_taking_barriers</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">barrier_info_df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>  <span class="c1"># NaNs</span>
+
+    <span class="c1"># Creating the stop loss barriers. If the stop loss factor is 0</span>
+    <span class="c1"># then there won&#39;t be any stop loss barriers.</span>
+    <span class="k">if</span> <span class="n">stop_loss_factor</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">stop_loss_barriers</span> <span class="o">=</span> <span class="o">-</span><span class="n">stop_loss_factor</span> <span class="o">*</span> <span class="n">barrier_info_df</span><span class="p">[</span><span class="n">DAILY_VOL</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">stop_loss_barriers</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">barrier_info_df</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>  <span class="c1"># NaNs</span>
+
+    <span class="p">(</span>
+        <span class="n">profit_taking_barriers_timestamps</span><span class="p">,</span>
+        <span class="n">stop_loss_barriers_timestamps</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">=</span> <span class="n">get_horizontal_barriers_hit</span><span class="p">(</span>
+        <span class="n">convert_to_timestamp</span><span class="p">(</span>
+            <span class="n">barrier_info_df</span><span class="p">[</span><span class="n">EVENT_END_TIME</span><span class="p">]</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="n">close</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span><span class="o">.</span><span class="n">values</span>
+        <span class="p">),</span>
+        <span class="n">convert_to_timestamp</span><span class="p">(</span><span class="n">barrier_info_df</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">values</span><span class="p">),</span>
+        <span class="n">close</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+        <span class="n">barrier_info_df</span><span class="p">[</span><span class="n">SIDE</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+        <span class="n">stop_loss_barriers</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+        <span class="n">profit_taking_barriers</span><span class="o">.</span><span class="n">values</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">profit_taking_barriers_timestamps</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span>
+        <span class="n">profit_taking_barriers_timestamps</span><span class="p">,</span>
+        <span class="n">dtype</span><span class="o">=</span><span class="n">pd</span><span class="o">.</span><span class="n">Int64Dtype</span><span class="p">(),</span>
+        <span class="n">index</span><span class="o">=</span><span class="n">barriers_df</span><span class="o">.</span><span class="n">index</span><span class="p">,</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+
+    <span class="n">stop_loss_barriers_timestamps</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span>
+        <span class="n">stop_loss_barriers_timestamps</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">pd</span><span class="o">.</span><span class="n">Int64Dtype</span><span class="p">(),</span> <span class="n">index</span><span class="o">=</span><span class="n">barriers_df</span><span class="o">.</span><span class="n">index</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+
+    <span class="n">barriers_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[:,</span> <span class="n">STOP_LOSS</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_datetime</span><span class="p">(</span>
+        <span class="n">stop_loss_barriers_timestamps</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="n">TIMESTAMP_UNIT</span>
+    <span class="p">)</span>
+    <span class="n">barriers_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[:,</span> <span class="n">PROFIT_TAKING</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">to_datetime</span><span class="p">(</span>
+        <span class="n">profit_taking_barriers_timestamps</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="n">TIMESTAMP_UNIT</span>
+    <span class="p">)</span>
+
+    <span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">barriers_df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span> <span class="o">==</span> <span class="p">{</span><span class="n">EVENT_END_TIME</span><span class="p">,</span> <span class="n">STOP_LOSS</span><span class="p">,</span> <span class="n">PROFIT_TAKING</span><span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">barriers_df</span></div>
+
+
+<span class="nd">@jit</span><span class="p">(</span><span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nopython</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">get_horizontal_barriers_hit</span><span class="p">(</span>
+    <span class="n">expiration_barrier_timestamps</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">index_timestamps</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">close</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">side</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">stop_loss_barriers</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="n">profit_taking_barriers</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get the horizontal barriers hits.</span>
+
+<span class="sd">    :param expiration_barrier_timestamps: Array with the timestamps of the vertical barrier</span>
+<span class="sd">    :type expiration_barrier_timestamps: np.ndarray</span>
+<span class="sd">    :param index_timestamps: Array with the timestamps of the position taking</span>
+<span class="sd">    :type index_timestamps: np.ndarray</span>
+<span class="sd">    :param close: Array with the price of the close</span>
+<span class="sd">    :type close: np.ndarray</span>
+<span class="sd">    :param side: Array with the side of the position (1, -1)</span>
+<span class="sd">    :type side: np.ndarray</span>
+<span class="sd">    :param stop_loss_barriers: Array with the stop loss barriers values</span>
+<span class="sd">    :type stop_loss_barriers: np.ndarray</span>
+<span class="sd">    :param profit_taking_barriers: Array with teh profit taking barriers values</span>
+<span class="sd">    :type profit_taking_barriers: np.ndarray</span>
+<span class="sd">    :return: Two arrays containing when the profit taking and the stop loss</span>
+<span class="sd">             barriers have been hit</span>
+<span class="sd">    :rtype: Tuple[np.ndarray, np.ndarray]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">stop_loss_barriers_timestamps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span>
+        <span class="n">expiration_barrier_timestamps</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span>
+    <span class="p">)</span>
+    <span class="n">profit_taking_barriers_timestamps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span>
+        <span class="n">expiration_barrier_timestamps</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span>
+    <span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">prange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">index_timestamps</span><span class="p">)):</span>
+        <span class="c1"># creating mask between the position taking date and expiration barrier</span>
+        <span class="c1"># date</span>
+        <span class="n">within_barrier_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">greater_equal</span><span class="p">(</span>
+            <span class="n">index_timestamps</span><span class="p">,</span> <span class="n">index_timestamps</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">less</span><span class="p">(</span><span class="n">index_timestamps</span><span class="p">,</span> <span class="n">expiration_barrier_timestamps</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+
+        <span class="c1"># selecting all the prices between the position taking date</span>
+        <span class="c1"># and expiration barrier date</span>
+        <span class="n">close_prices_within_barrier</span> <span class="o">=</span> <span class="n">close</span><span class="p">[</span><span class="n">within_barrier_mask</span><span class="p">]</span>
+
+        <span class="c1"># Calculating returns within the prices in the barriers</span>
+        <span class="n">returns_within_barrier</span> <span class="o">=</span> <span class="p">(</span><span class="n">close_prices_within_barrier</span> <span class="o">/</span> <span class="n">close</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">side</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="c1"># Calculating the first date when the stop loss barrier is hit.</span>
+        <span class="c1"># If the barrier is not hit, the result is nan</span>
+        <span class="n">stop_loss_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">less</span><span class="p">(</span><span class="n">returns_within_barrier</span><span class="p">,</span> <span class="n">stop_loss_barriers</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">stop_loss_mask</span><span class="p">):</span>
+            <span class="n">stop_loss_barriers_timestamps</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span>
+                <span class="n">index_timestamps</span><span class="p">[</span><span class="n">within_barrier_mask</span><span class="p">][</span><span class="n">stop_loss_mask</span><span class="p">]</span>
+            <span class="p">)</span>
+
+        <span class="c1"># Calculating the first date when the profit taking barrier is hit.</span>
+        <span class="c1"># If the barrier is not hit, the result is nan</span>
+        <span class="n">profit_taking_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">greater</span><span class="p">(</span>
+            <span class="n">returns_within_barrier</span><span class="p">,</span> <span class="n">profit_taking_barriers</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">profit_taking_mask</span><span class="p">):</span>
+            <span class="n">profit_taking_barriers_timestamps</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span>
+                <span class="n">index_timestamps</span><span class="p">[</span><span class="n">within_barrier_mask</span><span class="p">][</span><span class="n">profit_taking_mask</span><span class="p">]</span>
+            <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">profit_taking_barriers_timestamps</span><span class="p">,</span> <span class="n">stop_loss_barriers_timestamps</span>
+
+
+<div class="viewcode-block" id="get_labels"><a class="viewcode-back" href="../../../../mizarlabs.transformers.targets.html#mizarlabs.transformers.targets.labeling.get_labels">[docs]</a><span class="k">def</span> <span class="nf">get_labels</span><span class="p">(</span>
+    <span class="n">barriers_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="n">barriers_info_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+    <span class="n">close</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span>
+    <span class="n">metalabeling</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">expiration_label</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Calculate returns and assign return classes based on the first touched bar.</span>
+
+<span class="sd">    Case 1: (&#39;side&#39; not in barriers_info_df): bin in (-1,1) &lt;-label by price action</span>
+<span class="sd">    Case 2: (&#39;side&#39; in barriers_info_df): bin in (0,1) &lt;-label by pnl (meta-labeling)</span>
+
+<span class="sd">    :param barriers_df: dataframe with datetime when barriers are hit</span>
+<span class="sd">    :type barriers_df: pd.DataFrame</span>
+<span class="sd">    :param barriers_info_df: Info for creating the barriers</span>
+<span class="sd">    :type barriers_info_df: pd.DataFrame</span>
+<span class="sd">    :param close: Series of prices.</span>
+<span class="sd">    :type close: pd.Series</span>
+<span class="sd">    :param metalabeling: Whether or not metalabelign is activated</span>
+<span class="sd">    :type metalabeling: bool</span>
+
+<span class="sd">    :return: Dataframe containing event</span>
+<span class="sd">    :rtype: pd.DataFrame</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">check_missing_columns</span><span class="p">(</span><span class="n">barriers_info_df</span><span class="p">,</span> <span class="p">[</span><span class="n">EVENT_END_TIME</span><span class="p">,</span> <span class="n">DAILY_VOL</span><span class="p">,</span> <span class="n">SIDE</span><span class="p">])</span>
+
+    <span class="c1"># selecting bars that have a closed position</span>
+    <span class="n">events_without_na</span> <span class="o">=</span> <span class="n">barriers_info_df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="n">EVENT_END_TIME</span><span class="p">])</span>
+    <span class="n">list_existing_dates</span> <span class="o">=</span> <span class="n">events_without_na</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">union</span><span class="p">(</span>
+        <span class="n">events_without_na</span><span class="p">[</span><span class="n">EVENT_END_TIME</span><span class="p">]</span><span class="o">.</span><span class="n">values</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span>
+    <span class="n">px</span> <span class="o">=</span> <span class="n">close</span><span class="o">.</span><span class="n">reindex</span><span class="p">(</span><span class="n">list_existing_dates</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;bfill&quot;</span><span class="p">)</span>
+
+    <span class="c1"># creating dataframe with start position date</span>
+    <span class="n">output_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="n">events_without_na</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+    <span class="c1"># calculate the returns</span>
+    <span class="n">output_df</span><span class="p">[</span><span class="n">RETURN</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">px</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">events_without_na</span><span class="p">[</span><span class="n">EVENT_END_TIME</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">]</span><span class="o">.</span><span class="n">values</span>
+        <span class="o">/</span> <span class="n">px</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">events_without_na</span><span class="o">.</span><span class="n">index</span><span class="p">]</span>
+        <span class="o">-</span> <span class="mi">1</span>
+    <span class="p">)</span>
+    <span class="n">returns</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">close</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">events_without_na</span><span class="p">[</span><span class="n">EVENT_END_TIME</span><span class="p">]]</span><span class="o">.</span><span class="n">values</span>
+        <span class="o">/</span> <span class="n">close</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">events_without_na</span><span class="o">.</span><span class="n">index</span><span class="p">]</span>
+        <span class="o">-</span> <span class="mi">1</span>
+    <span class="p">)</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">RETURN</span><span class="p">)</span>
+
+    <span class="n">pd</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_series_equal</span><span class="p">(</span><span class="n">returns</span><span class="p">,</span> <span class="n">output_df</span><span class="p">[</span><span class="n">RETURN</span><span class="p">])</span>
+
+    <span class="k">if</span> <span class="n">metalabeling</span><span class="p">:</span>
+        <span class="c1"># metalabeling labels are always only 1 and 0. 1 is assigned when the</span>
+        <span class="c1"># base model is correct while 0 is assigned when the base model is not</span>
+        <span class="c1"># correct. When the base model does not take a position or the returns</span>
+        <span class="c1">#  are 0 then the metalabel will be na</span>
+        <span class="n">output_df</span><span class="p">[</span><span class="n">RETURN</span><span class="p">]</span> <span class="o">*=</span> <span class="n">events_without_na</span><span class="p">[</span><span class="n">SIDE</span><span class="p">]</span>
+        <span class="n">output_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">output_df</span><span class="p">[</span><span class="n">RETURN</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">LABEL</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">output_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">output_df</span><span class="p">[</span><span class="n">RETURN</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">,</span> <span class="n">LABEL</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">output_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">output_df</span><span class="p">[</span><span class="n">RETURN</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="n">LABEL</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span>
+        <span class="c1"># When metalabeling is not activated then the labels can be 1 or -1.</span>
+        <span class="c1"># 1 is when the returns are positive and -1 when the returns are</span>
+        <span class="c1"># negative</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">output_df</span><span class="p">[</span><span class="n">LABEL</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">output_df</span><span class="p">[</span><span class="n">RETURN</span><span class="p">])</span>
+
+    <span class="k">if</span> <span class="n">expiration_label</span><span class="p">:</span>
+        <span class="n">expired_events</span> <span class="o">=</span> <span class="n">barriers_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">events_without_na</span><span class="o">.</span><span class="n">index</span><span class="p">]</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span>
+            <span class="n">barriers_df</span><span class="o">.</span><span class="n">stop_loss</span><span class="o">.</span><span class="n">isna</span><span class="p">()</span> <span class="o">&amp;</span> <span class="n">barriers_df</span><span class="o">.</span><span class="n">profit_taking</span><span class="o">.</span><span class="n">isna</span><span class="p">()</span>
+        <span class="p">]</span>
+        <span class="n">output_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">expired_events</span><span class="o">.</span><span class="n">index</span><span class="p">,</span> <span class="n">LABEL</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">output_df</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span> <span class="o">==</span> <span class="p">{</span><span class="n">RETURN</span><span class="p">,</span> <span class="n">LABEL</span><span class="p">}</span>
+
+    <span class="k">return</span> <span class="n">output_df</span></div>
+
+
+<div class="viewcode-block" id="get_daily_vol"><a class="viewcode-back" href="../../../../mizarlabs.transformers.targets.html#mizarlabs.transformers.targets.labeling.get_daily_vol">[docs]</a><span class="k">def</span> <span class="nf">get_daily_vol</span><span class="p">(</span><span class="n">close</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">ewm_span</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Estimate the daily volatility.</span>
+
+<span class="sd">    :param close: Contains the close price</span>
+<span class="sd">    :type close: pd.Series</span>
+<span class="sd">    :param ewm_span: The span of the standard deviation</span>
+<span class="sd">    :type ewm_span: int</span>
+<span class="sd">    :return: The daily volatility per each bar</span>
+<span class="sd">    :rtype: pd.Series</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># find nearest 1 day apart close price</span>
+    <span class="n">indices_with_date_diff</span> <span class="o">=</span> <span class="n">close</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span>
+        <span class="n">close</span><span class="o">.</span><span class="n">index</span> <span class="o">-</span> <span class="n">pd</span><span class="o">.</span><span class="n">Timedelta</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="n">indices_filtered</span> <span class="o">=</span> <span class="n">indices_with_date_diff</span><span class="p">[</span><span class="n">indices_with_date_diff</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
+
+    <span class="c1"># creating series with the date of the nearest 1 day apart  close price</span>
+    <span class="n">shifted_close</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span>
+        <span class="n">close</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="n">indices_filtered</span> <span class="o">-</span> <span class="mi">1</span><span class="p">],</span>
+        <span class="n">index</span><span class="o">=</span><span class="n">close</span><span class="o">.</span><span class="n">index</span><span class="p">[</span><span class="n">close</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">indices_filtered</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="p">:],</span>
+    <span class="p">)</span>
+    <span class="c1"># calculating returns between close and nearest 1 day apart  close</span>
+    <span class="n">returns</span> <span class="o">=</span> <span class="n">close</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">shifted_close</span><span class="o">.</span><span class="n">index</span><span class="p">]</span> <span class="o">/</span> <span class="n">close</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">shifted_close</span><span class="p">]</span><span class="o">.</span><span class="n">values</span> <span class="o">-</span> <span class="mi">1</span>
+    <span class="n">daily_vol</span> <span class="o">=</span> <span class="n">returns</span><span class="o">.</span><span class="n">ewm</span><span class="p">(</span><span class="n">span</span><span class="o">=</span><span class="n">ewm_span</span><span class="p">)</span><span class="o">.</span><span class="n">std</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">daily_vol</span></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">MizarLabs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, MizarAI.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,194 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mizarlabs.transformers.trading package &#8212; MizarLabs 0.1.3 documentation</title>
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="mizarlabs-transformers-trading-package">
+<h1>mizarlabs.transformers.trading package<a class="headerlink" href="#mizarlabs-transformers-trading-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-mizarlabs.transformers.trading.bet_sizing">
+<span id="mizarlabs-transformers-trading-bet-sizing-module"></span><h2>mizarlabs.transformers.trading.bet_sizing module<a class="headerlink" href="#module-mizarlabs.transformers.trading.bet_sizing" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="mizarlabs.transformers.trading.bet_sizing.BetSizingBase">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.trading.bet_sizing.</span></code><code class="sig-name descname"><span class="pre">BetSizingBase</span></code><a class="reference internal" href="_modules/mizarlabs/transformers/trading/bet_sizing.html#BetSizingBase"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.trading.bet_sizing.BetSizingBase" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.BaseEstimator</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.TransformerMixin</span></code></p>
+<p>Base class for bet sizing transformers</p>
+<dl class="py method">
+<dt id="mizarlabs.transformers.trading.bet_sizing.BetSizingBase.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">pandas.core.series.Series</span><a class="reference internal" href="_modules/mizarlabs/transformers/trading/bet_sizing.html#BetSizingBase.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.trading.bet_sizing.BetSizingBase.transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="mizarlabs.transformers.trading.bet_sizing.BetSizingFromProbabilities">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.trading.bet_sizing.</span></code><code class="sig-name descname"><span class="pre">BetSizingFromProbabilities</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_classes</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">average_active</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">meta_labeling</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">discretise</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">bool</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step_size</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">probability_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'prob'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prediction_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'pred'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">side_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'side'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event_end_time_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'event_end_time'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bet_size_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'bet_size'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/trading/bet_sizing.html#BetSizingFromProbabilities"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.trading.bet_sizing.BetSizingFromProbabilities" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#mizarlabs.transformers.trading.bet_sizing.BetSizingBase" title="mizarlabs.transformers.trading.bet_sizing.BetSizingBase"><code class="xref py py-class docutils literal notranslate"><span class="pre">mizarlabs.transformers.trading.bet_sizing.BetSizingBase</span></code></a></p>
+<p>Calculate the bet size using the predicted probability.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>num_classes</strong> (<em>int</em>) – Number of labeled classes</p></li>
+<li><p><strong>average_active</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether we need to apply the average
+active to the bet sizing signal</p></li>
+<li><p><strong>meta_labeling</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether the bet sizing is calculated from a
+metalabeling signal</p></li>
+<li><p><strong>discretise</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether the output needs to be discretised</p></li>
+<li><p><strong>step_size</strong> (<em>int</em><em>, </em><em>optional</em>) – The step size of the discretisation</p></li>
+<li><p><strong>probability_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The column name of the probabilities</p></li>
+<li><p><strong>prediction_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The column name of the predictions</p></li>
+<li><p><strong>side_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The column name of the side of the ‘simpler’
+metalabeling model</p></li>
+<li><p><strong>event_end_time_column_name</strong> – The column name of the event end time</p></li>
+</ul>
+</dd>
+<dt class="field-even">Rtype event_end_time_column_name</dt>
+<dd class="field-even"><p>str, optional</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="mizarlabs.transformers.trading.bet_sizing.avg_active_signals">
+<code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.trading.bet_sizing.</span></code><code class="sig-name descname"><span class="pre">avg_active_signals</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">signals</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event_end_time_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'event_end_time'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bet_size_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'bet_size'</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">pandas.core.series.Series</span><a class="reference internal" href="_modules/mizarlabs/transformers/trading/bet_sizing.html#avg_active_signals"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.trading.bet_sizing.avg_active_signals" title="Permalink to this definition">¶</a></dt>
+<dd><p>Average the bet sizes of all concurrently not closed positions
+(e.i. no barrier has been hit yet)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>signals</strong> – Signal from which the active average is calculated</p></li>
+<li><p><strong>event_end_time_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – the name of the event end time</p></li>
+<li><p><strong>bet_size_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – the name of the bet size column</p></li>
+</ul>
+</dd>
+<dt class="field-even">Rtype signals</dt>
+<dd class="field-even"><p>pd.DataFrame</p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The active average signal</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>pd.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt id="mizarlabs.transformers.trading.bet_sizing.discretise_signal">
+<code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.trading.bet_sizing.</span></code><code class="sig-name descname"><span class="pre">discretise_signal</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">signal</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.series.Series</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">step_size</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">float</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">pandas.core.series.Series</span><a class="reference internal" href="_modules/mizarlabs/transformers/trading/bet_sizing.html#discretise_signal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.trading.bet_sizing.discretise_signal" title="Permalink to this definition">¶</a></dt>
+<dd><p>Discretise the bet size signal based on the step size given.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>signal</strong> (<em>pd.Series</em>) – Signal to discretise</p></li>
+<li><p><strong>step_size</strong> (<em>float</em>) – the step size to use for the discretisation</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Discretised signal</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>pd.Series</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-mizarlabs.transformers.trading">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-mizarlabs.transformers.trading" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">MizarLabs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, MizarAI.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/mizarlabs.transformers.trading.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

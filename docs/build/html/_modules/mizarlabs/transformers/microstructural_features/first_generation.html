@@ -1,0 +1,345 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mizarlabs.transformers.microstructural_features.first_generation &#8212; MizarLabs 0.1.3 documentation</title>
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../../" src="../../../../_static/documentation_options.js"></script>
+    <script src="../../../../_static/jquery.js"></script>
+    <script src="../../../../_static/underscore.js"></script>
+    <script src="../../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for mizarlabs.transformers.microstructural_features.first_generation</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">from</span> <span class="nn">mizarlabs</span> <span class="kn">import</span> <span class="n">static</span>
+<span class="kn">from</span> <span class="nn">mizarlabs.transformers.utils</span> <span class="kn">import</span> <span class="n">check_missing_columns</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">BaseEstimator</span>
+<span class="kn">from</span> <span class="nn">sklearn.base</span> <span class="kn">import</span> <span class="n">TransformerMixin</span>
+
+
+<div class="viewcode-block" id="RollMeasure"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.RollMeasure">[docs]</a><span class="k">class</span> <span class="nc">RollMeasure</span><span class="p">(</span><span class="n">BaseEstimator</span><span class="p">,</span> <span class="n">TransformerMixin</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Implement the roll measure which gives the estimate of effective bid-ask spread.</span>
+
+<span class="sd">    See page 282 of Advances in Financial Machine Learning by Marcos Lopez de</span>
+<span class="sd">    Prado for additional information.</span>
+
+<span class="sd">    :param window: The window size</span>
+<span class="sd">    :type window: int</span>
+<span class="sd">    :param close_column_name: The name of the close column</span>
+<span class="sd">    :type close_column_name: str, optional</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">window</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span> <span class="n">close_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">static</span><span class="o">.</span><span class="n">CLOSE</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">window</span> <span class="o">=</span> <span class="n">window</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">close_column_name</span> <span class="o">=</span> <span class="n">close_column_name</span>
+
+<div class="viewcode-block" id="RollMeasure.fit"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.RollMeasure.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">fit_params</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="RollMeasure.transform"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.RollMeasure.transform">[docs]</a>    <span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="n">check_missing_columns</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">close_column_name</span><span class="p">])</span>
+
+        <span class="n">close_diff</span> <span class="o">=</span> <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">close_column_name</span><span class="p">]</span><span class="o">.</span><span class="n">diff</span><span class="p">()</span>
+        <span class="n">close_diff_lag</span> <span class="o">=</span> <span class="n">close_diff</span><span class="o">.</span><span class="n">shift</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">close_diff</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">window</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">window</span><span class="p">)</span><span class="o">.</span><span class="n">cov</span><span class="p">(</span><span class="n">close_diff_lag</span><span class="p">)))</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="RollImpact"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.RollImpact">[docs]</a><span class="k">class</span> <span class="nc">RollImpact</span><span class="p">(</span><span class="n">RollMeasure</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Derivate from Roll Measure which takes into account dollar volume traded.</span>
+
+<span class="sd">    See page 282 of Advances in Financial Machine Learning by Marcos Lopez de</span>
+<span class="sd">    Prado for additional information.</span>
+
+<span class="sd">    :param window: The window size</span>
+<span class="sd">    :type window: int</span>
+<span class="sd">    :param close_column_name: The name of the close column</span>
+<span class="sd">    :type close_column_name: str, optional</span>
+<span class="sd">    :param quote_asset_volume_column_name: The name quote asset column column</span>
+<span class="sd">    :type quote_asset_volume_column_name: str, optional</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">window</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+        <span class="n">close_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">static</span><span class="o">.</span><span class="n">CLOSE</span><span class="p">,</span>
+        <span class="n">quote_asset_volume_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">static</span><span class="o">.</span><span class="n">QUOTE_ASSET_VOLUME</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">window</span><span class="p">,</span> <span class="n">close_column_name</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">quote_asset_volume_column_name</span> <span class="o">=</span> <span class="n">quote_asset_volume_column_name</span>
+
+<div class="viewcode-block" id="RollImpact.fit"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.RollImpact.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">fit_params</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="RollImpact.transform"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.RollImpact.transform">[docs]</a>    <span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="n">roll_measure</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">roll_measure</span> <span class="o">/</span> <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">quote_asset_volume_column_name</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+            <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span>
+        <span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="ParkinsonVolatility"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.ParkinsonVolatility">[docs]</a><span class="k">class</span> <span class="nc">ParkinsonVolatility</span><span class="p">(</span><span class="n">BaseEstimator</span><span class="p">,</span> <span class="n">TransformerMixin</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    High low volatility estimator developed by Parkinson (1980).</span>
+
+<span class="sd">    :param window: The window size</span>
+<span class="sd">    :type window: int</span>
+<span class="sd">    :param high_column_name: The name of the high column</span>
+<span class="sd">    :type high_column_name: str, optional</span>
+<span class="sd">    :param low_column_name: The name of the low column</span>
+<span class="sd">    :type low_column_name: str, optional</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">window</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+        <span class="n">high_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">static</span><span class="o">.</span><span class="n">HIGH</span><span class="p">,</span>
+        <span class="n">low_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">static</span><span class="o">.</span><span class="n">LOW</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">window</span> <span class="o">=</span> <span class="n">window</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">high_column_name</span> <span class="o">=</span> <span class="n">high_column_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">low_column_name</span> <span class="o">=</span> <span class="n">low_column_name</span>
+
+<div class="viewcode-block" id="ParkinsonVolatility.fit"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.ParkinsonVolatility.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">fit_params</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="ParkinsonVolatility.transform"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.ParkinsonVolatility.transform">[docs]</a>    <span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="n">check_missing_columns</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">high_column_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">low_column_name</span><span class="p">])</span>
+
+        <span class="n">parkinson_constant</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="p">(</span>
+                <span class="n">parkinson_constant</span>
+                <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">square</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">high_column_name</span><span class="p">]</span> <span class="o">/</span> <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">low_column_name</span><span class="p">]))</span>
+            <span class="p">)</span>
+            <span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">window</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span></div></div>
+
+
+<span class="k">def</span> <span class="nf">_get_beta</span><span class="p">(</span><span class="n">high</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">low</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">window</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get beta estimate from Corwin-Schultz algorithm (p.285, Snippet 19.1).</span>
+
+<span class="sd">    :param high: Series containing high prices</span>
+<span class="sd">    :rtype high: pd.Series</span>
+<span class="sd">    :param low: Series containing low prices</span>
+<span class="sd">    :type low: pd.Series</span>
+<span class="sd">    :param window: The window size of the estimator</span>
+<span class="sd">    :rtype window: int</span>
+<span class="sd">    :return: Beta estimates</span>
+<span class="sd">    :rtype: pd.Series</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ret</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">high</span> <span class="o">/</span> <span class="n">low</span><span class="p">)</span>
+    <span class="n">high_low_ret</span> <span class="o">=</span> <span class="n">ret</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">beta</span> <span class="o">=</span> <span class="n">high_low_ret</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">window</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+    <span class="n">beta</span> <span class="o">=</span> <span class="n">beta</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">window</span><span class="o">=</span><span class="n">window</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">beta</span>
+
+
+<span class="k">def</span> <span class="nf">_get_gamma</span><span class="p">(</span><span class="n">high</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">low</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get gamma estimate from Corwin-Schultz algorithm (p.285, Snippet 19.1).</span>
+
+<span class="sd">    :param high: Series containing high prices</span>
+<span class="sd">    :rtype high: pd.Series</span>
+<span class="sd">    :param low: Series containing low prices</span>
+<span class="sd">    :type low: pd.Series</span>
+<span class="sd">    :return: Gamma estimates</span>
+<span class="sd">    :rtype: pd.Series</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">high_max</span> <span class="o">=</span> <span class="n">high</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">window</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+    <span class="n">low_min</span> <span class="o">=</span> <span class="n">low</span><span class="o">.</span><span class="n">rolling</span><span class="p">(</span><span class="n">window</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">min</span><span class="p">()</span>
+    <span class="n">gamma</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">high_max</span> <span class="o">/</span> <span class="n">low_min</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="k">return</span> <span class="n">gamma</span>
+
+
+<span class="k">def</span> <span class="nf">_get_alpha</span><span class="p">(</span><span class="n">beta</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">gamma</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get alpha from Corwin-_get_betaSchultz algorithm, (p.285, Snippet 19.1).</span>
+
+<span class="sd">    :param high: Series containing high prices</span>
+<span class="sd">    :rtype high: pd.Series</span>
+<span class="sd">    :param low: Series containing low prices</span>
+<span class="sd">    :type low: pd.Series</span>
+<span class="sd">    :return: Alpha estimates</span>
+<span class="sd">    :rtype: pd.Series</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">den</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">**</span> <span class="mf">0.5</span>
+    <span class="n">alpha</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span> <span class="o">**</span> <span class="mf">0.5</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">beta</span> <span class="o">**</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">/</span> <span class="n">den</span>
+    <span class="n">alpha</span> <span class="o">-=</span> <span class="p">(</span><span class="n">gamma</span> <span class="o">/</span> <span class="n">den</span><span class="p">)</span> <span class="o">**</span> <span class="mf">0.5</span>
+    <span class="n">alpha</span><span class="p">[</span><span class="n">alpha</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># Set negative alphas to 0 (see p.727 of paper)</span>
+    <span class="k">return</span> <span class="n">alpha</span>
+
+
+<div class="viewcode-block" id="CorwinSchultzSpread"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.CorwinSchultzSpread">[docs]</a><span class="k">class</span> <span class="nc">CorwinSchultzSpread</span><span class="p">(</span><span class="n">BaseEstimator</span><span class="p">,</span> <span class="n">TransformerMixin</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Corwin Schultz spread estimator.</span>
+
+<span class="sd">    See page 284 of Advances in Financial Machine Learning by Marcos Lopez de</span>
+<span class="sd">    Prado for additional information.</span>
+
+<span class="sd">    :param window: The window size</span>
+<span class="sd">    :type window: int</span>
+<span class="sd">    :param high_column_name: The name of the high column</span>
+<span class="sd">    :type high_column_name_get_beta: str, optional</span>
+<span class="sd">    :param low_column_name: The name of the low column</span>
+<span class="sd">    :type low_column_name: str, optional</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">window</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+        <span class="n">high_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">static</span><span class="o">.</span><span class="n">HIGH</span><span class="p">,</span>
+        <span class="n">low_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">static</span><span class="o">.</span><span class="n">LOW</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">window</span> <span class="o">=</span> <span class="n">window</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">high_column_name</span> <span class="o">=</span> <span class="n">high_column_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">low_column_name</span> <span class="o">=</span> <span class="n">low_column_name</span>
+
+<div class="viewcode-block" id="CorwinSchultzSpread.fit"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.CorwinSchultzSpread.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">fit_params</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="CorwinSchultzSpread.transform"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.CorwinSchultzSpread.transform">[docs]</a>    <span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+
+        <span class="n">check_missing_columns</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">high_column_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">low_column_name</span><span class="p">])</span>
+
+        <span class="n">beta</span> <span class="o">=</span> <span class="n">_get_beta</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">high_column_name</span><span class="p">],</span> <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">low_column_name</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">window</span><span class="p">)</span>
+        <span class="n">gamma</span> <span class="o">=</span> <span class="n">_get_gamma</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">high_column_name</span><span class="p">],</span> <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">low_column_name</span><span class="p">])</span>
+        <span class="n">alpha</span> <span class="o">=</span> <span class="n">_get_alpha</span><span class="p">(</span><span class="n">beta</span><span class="p">,</span> <span class="n">gamma</span><span class="p">)</span>
+        <span class="n">spread</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">alpha</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">alpha</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">spread</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="BeckersParkinsonVolatility"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.BeckersParkinsonVolatility">[docs]</a><span class="k">class</span> <span class="nc">BeckersParkinsonVolatility</span><span class="p">(</span><span class="n">BaseEstimator</span><span class="p">,</span> <span class="n">TransformerMixin</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get Bekker-Parkinson volatility from gamma and beta in Corwin-Schultz algorithm, (p.286, Snippet 19.2).</span>
+
+<span class="sd">    See page 284 of Advances in Financial Machine Learning by Marcos Lopez de</span>
+<span class="sd">    Prado for additional information.</span>
+
+<span class="sd">    :param window: The window size</span>
+<span class="sd">    :type window: int</span>
+<span class="sd">    :param high_column_name: The name of the high column</span>
+<span class="sd">    :type high_column_name: str, optional</span>
+<span class="sd">    :param low_column_name: The name of the low column</span>
+<span class="sd">    :type low_column_name: str, optional</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">window</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+        <span class="n">high_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">static</span><span class="o">.</span><span class="n">HIGH</span><span class="p">,</span>
+        <span class="n">low_column_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">static</span><span class="o">.</span><span class="n">LOW</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">window</span> <span class="o">=</span> <span class="n">window</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">high_column_name</span> <span class="o">=</span> <span class="n">high_column_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">low_column_name</span> <span class="o">=</span> <span class="n">low_column_name</span>
+
+<div class="viewcode-block" id="BeckersParkinsonVolatility.fit"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.BeckersParkinsonVolatility.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">fit_params</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="BeckersParkinsonVolatility.transform"><a class="viewcode-back" href="../../../../mizarlabs.transformers.microstructural_features.html#mizarlabs.transformers.microstructural_features.first_generation.BeckersParkinsonVolatility.transform">[docs]</a>    <span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+
+        <span class="n">check_missing_columns</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">high_column_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">low_column_name</span><span class="p">])</span>
+
+        <span class="n">beta</span> <span class="o">=</span> <span class="n">_get_beta</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">high_column_name</span><span class="p">],</span> <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">low_column_name</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">window</span><span class="p">)</span>
+        <span class="n">gamma</span> <span class="o">=</span> <span class="n">_get_gamma</span><span class="p">(</span><span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">high_column_name</span><span class="p">],</span> <span class="n">X</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">low_column_name</span><span class="p">])</span>
+
+        <span class="n">k2</span> <span class="o">=</span> <span class="p">(</span><span class="mi">8</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span> <span class="o">**</span> <span class="mf">0.5</span>
+        <span class="n">den</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">**</span> <span class="mf">0.5</span>
+        <span class="n">sigma</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span> <span class="o">**</span> <span class="o">-</span><span class="mf">0.5</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">beta</span> <span class="o">**</span> <span class="mf">0.5</span> <span class="o">/</span> <span class="p">(</span><span class="n">k2</span> <span class="o">*</span> <span class="n">den</span><span class="p">)</span>
+        <span class="n">sigma</span> <span class="o">+=</span> <span class="p">(</span><span class="n">gamma</span> <span class="o">/</span> <span class="p">(</span><span class="n">k2</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">den</span><span class="p">))</span> <span class="o">**</span> <span class="mf">0.5</span>
+        <span class="n">sigma</span><span class="p">[</span><span class="n">sigma</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">return</span> <span class="n">sigma</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span></div></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../../index.html">MizarLabs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, MizarAI.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

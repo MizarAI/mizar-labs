@@ -1,0 +1,373 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mizarlabs.transformers.microstructural_features package &#8212; MizarLabs 0.1.3 documentation</title>
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="mizarlabs-transformers-microstructural-features-package">
+<h1>mizarlabs.transformers.microstructural_features package<a class="headerlink" href="#mizarlabs-transformers-microstructural-features-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-mizarlabs.transformers.microstructural_features.first_generation">
+<span id="mizarlabs-transformers-microstructural-features-first-generation-module"></span><h2>mizarlabs.transformers.microstructural_features.first_generation module<a class="headerlink" href="#module-mizarlabs.transformers.microstructural_features.first_generation" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.BeckersParkinsonVolatility">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.microstructural_features.first_generation.</span></code><code class="sig-name descname"><span class="pre">BeckersParkinsonVolatility</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">high_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'high'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">low_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'low'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#BeckersParkinsonVolatility"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.BeckersParkinsonVolatility" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.BaseEstimator</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.TransformerMixin</span></code></p>
+<p>Get Bekker-Parkinson volatility from gamma and beta in Corwin-Schultz algorithm, (p.286, Snippet 19.2).</p>
+<p>See page 284 of Advances in Financial Machine Learning by Marcos Lopez de
+Prado for additional information.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>window</strong> (<em>int</em>) – The window size</p></li>
+<li><p><strong>high_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the high column</p></li>
+<li><p><strong>low_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the low column</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.BeckersParkinsonVolatility.fit">
+<code class="sig-name descname"><span class="pre">fit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">fit_params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#BeckersParkinsonVolatility.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.BeckersParkinsonVolatility.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.BeckersParkinsonVolatility.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">numpy.ndarray</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#BeckersParkinsonVolatility.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.BeckersParkinsonVolatility.transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.CorwinSchultzSpread">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.microstructural_features.first_generation.</span></code><code class="sig-name descname"><span class="pre">CorwinSchultzSpread</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">high_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'high'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">low_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'low'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#CorwinSchultzSpread"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.CorwinSchultzSpread" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.BaseEstimator</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.TransformerMixin</span></code></p>
+<p>Corwin Schultz spread estimator.</p>
+<p>See page 284 of Advances in Financial Machine Learning by Marcos Lopez de
+Prado for additional information.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>window</strong> (<em>int</em>) – The window size</p></li>
+<li><p><strong>high_column_name</strong> – The name of the high column</p></li>
+<li><p><strong>low_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the low column</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.CorwinSchultzSpread.fit">
+<code class="sig-name descname"><span class="pre">fit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">fit_params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#CorwinSchultzSpread.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.CorwinSchultzSpread.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.CorwinSchultzSpread.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">numpy.ndarray</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#CorwinSchultzSpread.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.CorwinSchultzSpread.transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.ParkinsonVolatility">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.microstructural_features.first_generation.</span></code><code class="sig-name descname"><span class="pre">ParkinsonVolatility</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">high_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'high'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">low_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'low'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#ParkinsonVolatility"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.ParkinsonVolatility" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.BaseEstimator</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.TransformerMixin</span></code></p>
+<p>High low volatility estimator developed by Parkinson (1980).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>window</strong> (<em>int</em>) – The window size</p></li>
+<li><p><strong>high_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the high column</p></li>
+<li><p><strong>low_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the low column</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.ParkinsonVolatility.fit">
+<code class="sig-name descname"><span class="pre">fit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">fit_params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#ParkinsonVolatility.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.ParkinsonVolatility.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.ParkinsonVolatility.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">numpy.ndarray</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#ParkinsonVolatility.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.ParkinsonVolatility.transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.RollImpact">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.microstructural_features.first_generation.</span></code><code class="sig-name descname"><span class="pre">RollImpact</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">close_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'close'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">quote_asset_volume_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'quote_asset_volume'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#RollImpact"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.RollImpact" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#mizarlabs.transformers.microstructural_features.first_generation.RollMeasure" title="mizarlabs.transformers.microstructural_features.first_generation.RollMeasure"><code class="xref py py-class docutils literal notranslate"><span class="pre">mizarlabs.transformers.microstructural_features.first_generation.RollMeasure</span></code></a></p>
+<p>Derivate from Roll Measure which takes into account dollar volume traded.</p>
+<p>See page 282 of Advances in Financial Machine Learning by Marcos Lopez de
+Prado for additional information.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>window</strong> (<em>int</em>) – The window size</p></li>
+<li><p><strong>close_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the close column</p></li>
+<li><p><strong>quote_asset_volume_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name quote asset column column</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.RollImpact.fit">
+<code class="sig-name descname"><span class="pre">fit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">fit_params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#RollImpact.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.RollImpact.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.RollImpact.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">numpy.ndarray</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#RollImpact.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.RollImpact.transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.RollMeasure">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.microstructural_features.first_generation.</span></code><code class="sig-name descname"><span class="pre">RollMeasure</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">close_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'close'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#RollMeasure"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.RollMeasure" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.BaseEstimator</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.TransformerMixin</span></code></p>
+<p>Implement the roll measure which gives the estimate of effective bid-ask spread.</p>
+<p>See page 282 of Advances in Financial Machine Learning by Marcos Lopez de
+Prado for additional information.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>window</strong> (<em>int</em>) – The window size</p></li>
+<li><p><strong>close_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the close column</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.RollMeasure.fit">
+<code class="sig-name descname"><span class="pre">fit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">fit_params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#RollMeasure.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.RollMeasure.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.first_generation.RollMeasure.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">numpy.ndarray</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/first_generation.html#RollMeasure.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.first_generation.RollMeasure.transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-mizarlabs.transformers.microstructural_features.second_generation">
+<span id="mizarlabs-transformers-microstructural-features-second-generation-module"></span><h2>mizarlabs.transformers.microstructural_features.second_generation module<a class="headerlink" href="#module-mizarlabs.transformers.microstructural_features.second_generation" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="mizarlabs.transformers.microstructural_features.second_generation.AmihudLambda">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.microstructural_features.second_generation.</span></code><code class="sig-name descname"><span class="pre">AmihudLambda</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">close_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'close'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">quote_asset_volume_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'quote_asset_volume'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/second_generation.html#AmihudLambda"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.second_generation.AmihudLambda" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.BaseEstimator</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.TransformerMixin</span></code></p>
+<p>Amihud Lambda liquidity estimator (p.288).</p>
+<p>See page 288 of Advances in Financial Machine Learning by Marcos Lopez de
+Prado for additional information.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>window</strong> (<em>int</em>) – The window size</p></li>
+<li><p><strong>close_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the close column</p></li>
+<li><p><strong>quote_asset_volume_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the quote asset volume column</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.second_generation.AmihudLambda.fit">
+<code class="sig-name descname"><span class="pre">fit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">fit_params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/second_generation.html#AmihudLambda.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.second_generation.AmihudLambda.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.second_generation.AmihudLambda.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">numpy.ndarray</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/second_generation.html#AmihudLambda.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.second_generation.AmihudLambda.transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="mizarlabs.transformers.microstructural_features.second_generation.HasbrouckLambda">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.microstructural_features.second_generation.</span></code><code class="sig-name descname"><span class="pre">HasbrouckLambda</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">close_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'close'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">quote_asset_volume_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'quote_asset_volume'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/second_generation.html#HasbrouckLambda"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.second_generation.HasbrouckLambda" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.BaseEstimator</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.TransformerMixin</span></code></p>
+<p>Hasbrouck Lambda price impact estimator(p.289).</p>
+<p>See page 289 of Advances in Financial Machine Learning by Marcos Lopez de
+Prado for additional information.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>window</strong> (<em>int</em>) – The window size</p></li>
+<li><p><strong>close_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the close column</p></li>
+<li><p><strong>quote_asset_volume_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the quote asset volume column</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.second_generation.HasbrouckLambda.fit">
+<code class="sig-name descname"><span class="pre">fit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">fit_params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/second_generation.html#HasbrouckLambda.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.second_generation.HasbrouckLambda.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.second_generation.HasbrouckLambda.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">numpy.ndarray</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/second_generation.html#HasbrouckLambda.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.second_generation.HasbrouckLambda.transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="mizarlabs.transformers.microstructural_features.second_generation.KyleLambda">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.microstructural_features.second_generation.</span></code><code class="sig-name descname"><span class="pre">KyleLambda</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">close_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'close'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_asset_volume_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'base_asset_volume'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/second_generation.html#KyleLambda"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.second_generation.KyleLambda" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.BaseEstimator</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.TransformerMixin</span></code></p>
+<blockquote>
+<div><p>Kyle lambda liquidity estimator (p.286).</p>
+</div></blockquote>
+<p>See page 286 of Advances in Financial Machine Learning by Marcos Lopez de
+Prado for additional information.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>window</strong> (<em>int</em>) – The window size</p></li>
+<li><p><strong>close_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the close column</p></li>
+<li><p><strong>base_asset_volume_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – The name of the base asset volume column</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.second_generation.KyleLambda.fit">
+<code class="sig-name descname"><span class="pre">fit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">fit_params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/second_generation.html#KyleLambda.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.second_generation.KyleLambda.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.second_generation.KyleLambda.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">numpy.ndarray</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/second_generation.html#KyleLambda.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.second_generation.KyleLambda.transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-mizarlabs.transformers.microstructural_features.vpin">
+<span id="mizarlabs-transformers-microstructural-features-vpin-module"></span><h2>mizarlabs.transformers.microstructural_features.vpin module<a class="headerlink" href="#module-mizarlabs.transformers.microstructural_features.vpin" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="mizarlabs.transformers.microstructural_features.vpin.VPIN">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">mizarlabs.transformers.microstructural_features.vpin.</span></code><code class="sig-name descname"><span class="pre">VPIN</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">window</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_asset_volume_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'base_asset_volume'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_asset_buy_volume_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'base_asset_buy_volume'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_asset_sell_volume_column_name</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">'base_asset_sell_volume'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/vpin.html#VPIN"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.vpin.VPIN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.BaseEstimator</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">sklearn.base.TransformerMixin</span></code></p>
+<p>Implement the Volume-Synchronized Probability of Informed Trading.</p>
+<p>We assume that the index of the dataframe in input is based on the close time</p>
+<p>See page 292 of Advances in Financial Machine Learning by Marcos Lopez de
+Prado for additional information.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>window</strong> (<em>int</em>) – The window size used for the calculation of the VPIN</p></li>
+<li><p><strong>base_asset_volume_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – name of the column where the volume (sum of the base asset quantity per trade)
+of the time bar is stored, defaults to config.BASE_ASSET_VOLUME</p></li>
+<li><p><strong>base_asset_buy_volume_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – name of the column where the volume (sum of the buy base asset quantity
+per trade) of the time bar is stored, defaults to
+config.BASE_ASSET_BUY_VOLUME</p></li>
+<li><p><strong>base_asset_sell_volume_column_name</strong> (<em>str</em><em>, </em><em>optional</em>) – name of the column where the volume (sum of the sell base asset quantity
+per trade) of the time bar is stored, defaults to
+config.BASE_ASSET_SELL_VOLUME</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.vpin.VPIN.fit">
+<code class="sig-name descname"><span class="pre">fit</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">fit_params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/vpin.html#VPIN.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.vpin.VPIN.fit" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="mizarlabs.transformers.microstructural_features.vpin.VPIN.transform">
+<code class="sig-name descname"><span class="pre">transform</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">numpy.ndarray</span><a class="reference internal" href="_modules/mizarlabs/transformers/microstructural_features/vpin.html#VPIN.transform"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#mizarlabs.transformers.microstructural_features.vpin.VPIN.transform" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-mizarlabs.transformers.microstructural_features">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-mizarlabs.transformers.microstructural_features" title="Permalink to this headline">¶</a></h2>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">MizarLabs</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2021, MizarAI.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.5.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/mizarlabs.transformers.microstructural_features.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
