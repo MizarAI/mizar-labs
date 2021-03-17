@@ -46,7 +46,8 @@ jobs:
         ./configure --prefix=/usr
         sudo make
         sudo make install
-        cd ../mizar-labs/
+        cd ..
+        echo $PWD
         pip install pytest==5.3.5
         pip install pytest-parallel
         pip install -e .
