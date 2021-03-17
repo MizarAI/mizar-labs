@@ -3,8 +3,8 @@ import pandas as pd
 import pytest
 from mizarlabs.model.model_selection import CombPurgedKFoldCV
 from mizarlabs.model.model_selection import embargo
-from tests.conftest import create_random_sample_set
-from tests.conftest import prepare_cv_object
+from mizarlabs.tests.conftest import create_random_sample_set
+from mizarlabs.tests.conftest import prepare_cv_object
 
 
 @pytest.mark.usefixtures("time_inhomogeneous_data")
