@@ -43,9 +43,9 @@ jobs:
         curl -L -O http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
         tar -zxf ta-lib-0.4.0-src.tar.gz
         cd ta-lib
-        ./configure --prefix=/usr
-        sudo make
-        sudo make install
+        # ./configure --prefix=/usr
+        # sudo make
+        # sudo make install
         cd ..
         echo $PWD
         pip install pytest==5.3.5
