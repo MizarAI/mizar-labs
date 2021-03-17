@@ -13,6 +13,8 @@ Please read the [documentation](https://mizarlabs.readthedocs.io/) for further e
 
 ## Installing
 
+Before installing the package please install [TA-Lib dependencies](https://mrjbq7.github.io/ta-lib/install.html)
+
 Install and update with [pip](https://pip.pypa.io/en/stable/quickstart/):
 
 ```bash
