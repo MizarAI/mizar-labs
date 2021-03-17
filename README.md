@@ -1,5 +1,7 @@
 ![CI](https://github.com/MizarAI/mizar-labs/workflows/CI/badge.svg?branch=master)
 [![codecov](https://codecov.io/gh/MizarAI/mizar-labs/branch/master/graph/badge.svg?token=W6VKLA1OF9)](https://codecov.io/gh/MizarAI/mizar-labs)
+[![GitHub](https://img.shields.io/github/license/mizarai/mizar-labs)](https://img.shields.io/github/license/mizarai/mizar-labs)
+
 
 # Welcome to Mizar Labs
 
