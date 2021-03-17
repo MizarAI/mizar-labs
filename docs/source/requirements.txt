@@ -1,0 +1,4 @@
+pandas>=1.2.2            # via -r requirements.in
+scikit-learn>=0.24.1      # via -r requirements.in, scikit-optimize
+numba>=0.52.0             # via -r requirements.in
+pytest>=6.2.2
