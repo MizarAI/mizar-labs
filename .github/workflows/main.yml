@@ -46,9 +46,8 @@ jobs:
         ./configure --prefix=/usr
         sudo make
         sudo make install
-        cd ..
+        cd ../mizar-labs/
         pip install pytest==5.3.5
         pip install pytest-parallel
-        cd Mizar-ai
         pip install -e .
         pytest mizarlabs/tests
