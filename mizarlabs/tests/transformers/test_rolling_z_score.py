@@ -1,5 +1,5 @@
-from mizarlabs.transformers.features.custom import RollingZScoreTransformer
-from mizarlabs.transformers.features.custom import RollingZScoreTransformerFactory
+from mizarlabs.transformers.features import RollingZScoreTransformer
+from mizarlabs.transformers.features import RollingZScoreTransformerFactory
 import pandas as pd
 import pytest
 import numpy as np
