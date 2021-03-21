@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
+from mizarlabs import static
 
 
 class RollingZScoreTransformer(BaseEstimator, TransformerMixin):
@@ -27,7 +28,7 @@ class RollingZScoreTransformer(BaseEstimator, TransformerMixin):
         """
         series = self.to_series_func(X)
         rolling_z_score = self.calc_z_score(series)
-        return rolling_z_score
+        return rolling_z_score.values.reshape(-1, 1)
 
     def calc_z_score(self, X: pd.Series) -> pd.Series:
         """calculated the rolling z score
@@ -46,7 +47,7 @@ class RollingZScoreTransformerFactory:
     """Factory for creating predefined rolling z score transformers.
     """
     types = dict(
-        bar_arrival_time=lambda bars_df: bars_df.index.to_series().diff().dropna().astype(int),
+        bar_arrival_time=lambda bars_df: bars_df.index.to_series().astype(int).diff(),
         buy_sell_diff=lambda bars_df: bars_df.quote_asset_buy_volume - bars_df.quote_asset_sell_volume,
         average_buy_size=lambda bars_df: bars_df.quote_asset_buy_volume / bars_df.num_buy_ticks,
         high_to_low_ratio=lambda bars_df: (bars_df.high / bars_df.low),
