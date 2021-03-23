@@ -43,14 +43,27 @@ class RollingZScoreTransformer(BaseEstimator, TransformerMixin):
         rolling_z_score = (X - X_rolling_mean) / X_rolling_std
         return rolling_z_score
 
+
+def bar_arrival_time(bars_df: pd.DataFrame) -> pd.Series:
+    return bars_df.index.to_series().astype(int).diff()
+
+def buy_sell_diff(bars_df: pd.DataFrame) -> pd.Series:
+    return bars_df.quote_asset_buy_volume - bars_df.quote_asset_sell_volume
+
+def average_buy_size(bars_df: pd.DataFrame) -> pd.Series:
+    return bars_df.quote_asset_buy_volume / bars_df.num_buy_ticks
+
+def high_to_low_ratio(bars_df: pd.DataFrame) -> pd.Series:
+    return (bars_df.high / bars_df.low)
+
 class RollingZScoreTransformerFactory:
     """Factory for creating predefined rolling z score transformers.
     """
     types = dict(
-        bar_arrival_time=lambda bars_df: bars_df.index.to_series().astype(int).diff(),
-        buy_sell_diff=lambda bars_df: bars_df.quote_asset_buy_volume - bars_df.quote_asset_sell_volume,
-        average_buy_size=lambda bars_df: bars_df.quote_asset_buy_volume / bars_df.num_buy_ticks,
-        high_to_low_ratio=lambda bars_df: (bars_df.high / bars_df.low),
+        bar_arrival_time=bar_arrival_time,
+        buy_sell_diff=buy_sell_diff,
+        average_buy_size=average_buy_size,
+        high_to_low_ratio=high_to_low_ratio,
     )
 
     @classmethod
