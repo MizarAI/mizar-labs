@@ -48,13 +48,13 @@ def bar_arrival_time(bars_df: pd.DataFrame) -> pd.Series:
     return bars_df.index.to_series().astype(int).diff()
 
 def buy_sell_diff(bars_df: pd.DataFrame) -> pd.Series:
-    return bars_df.quote_asset_buy_volume - bars_df.quote_asset_sell_volume,
+    return bars_df.quote_asset_buy_volume - bars_df.quote_asset_sell_volume
 
 def average_buy_size(bars_df: pd.DataFrame) -> pd.Series:
-    return bars_df.quote_asset_buy_volume / bars_df.num_buy_ticks,
+    return bars_df.quote_asset_buy_volume / bars_df.num_buy_ticks
 
 def high_to_low_ratio(bars_df: pd.DataFrame) -> pd.Series:
-    return (bars_df.high / bars_df.low),
+    return (bars_df.high / bars_df.low)
 
 class RollingZScoreTransformerFactory:
     """Factory for creating predefined rolling z score transformers.
