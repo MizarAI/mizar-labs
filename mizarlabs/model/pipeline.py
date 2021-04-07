@@ -1,3 +1,4 @@
+import logging
 from copy import deepcopy
 from typing import Dict
 from typing import Tuple
@@ -5,7 +6,13 @@ from typing import Union
 
 import numpy as np
 import pandas as pd
-import logging
+from sklearn.base import BaseEstimator
+from sklearn.base import TransformerMixin
+from sklearn.pipeline import FeatureUnion
+from sklearn.pipeline import Pipeline
+from sklearn.utils.validation import check_is_fitted
+from sklearn.utils.validation import check_X_y
+
 from mizarlabs.model.model_selection import CombPurgedKFoldCV
 from mizarlabs.static import CLOSE
 from mizarlabs.static import EVENT_END_TIME
@@ -17,12 +24,6 @@ from mizarlabs.static import STOP_LOSS
 from mizarlabs.transformers.targets.labeling import get_daily_vol
 from mizarlabs.transformers.trading.bet_sizing import BetSizingFromProbabilities
 from mizarlabs.transformers.utils import check_missing_columns
-from sklearn.base import BaseEstimator
-from sklearn.base import TransformerMixin
-from sklearn.pipeline import FeatureUnion
-from sklearn.pipeline import Pipeline
-from sklearn.utils.validation import check_is_fitted
-from sklearn.utils.validation import check_X_y
 
 
 class MizarFeatureUnion(FeatureUnion):
@@ -72,8 +73,6 @@ class StrategySignalPipeline:
     model, unless a bet sizer is set and in this case the bet sizer calculates
     the size from the probabilites provided by the metalabeling model
 
-    :param primary_model: The primary model estimator
-    :type primary_model: BaseEstimator
     :param feature_transformers_primary_model: The feature transformer that
                                                transforms the data for the
                                                primary model
@@ -82,14 +81,7 @@ class StrategySignalPipeline:
                                                     transforms the data for the
                                                     metalabeling model
     :type feature_transformers_metalabeling_model: TransformerMixin
-    :param metalabeling_model: The metalabeling model estimator
-    :type metalabeling_model: BaseEstimator
-    :param cpcv_num_groups: The number of groups for the combinatorial cross
-                            validation used for the metalabels calculation
-    :type cpcv_num_groups: int
-    :param embargo_td: The number of days to use for the embargo of
-                       combinatorial cross validation
-    :type embargo_td: pd.Timedelta
+
     :param metalabeling_use_proba_primary_model: Whether to use probabilities
                                                  of the primary model as
                                                  features in the metalabeling
@@ -110,8 +102,7 @@ class StrategySignalPipeline:
     _metalabeling_model_features = "metalabeling_model_features"
     _metalabeling_model_predictions = "metalabeling_model_predictions"
     _metalabeling_model_proba = "metalabeling_model_proba"
-    # TODO: add median to the align methods. The issue is that median does not
-    #  preserve the type
+
     _align_methods = {
         "mean": np.mean,
         "min": np.min,
@@ -120,21 +111,20 @@ class StrategySignalPipeline:
 
     def __init__(
         self,
-        primary_model: BaseEstimator,
         feature_transformers_primary_model: Union[
             Dict[str, Union[TransformerMixin, None]]
         ],
+        align_on: str,
+        align_how: str = "mean",
         feature_transformers_metalabeling_model: Union[
             Dict[str, Union[TransformerMixin, None]]
         ] = None,
-        metalabeling_model: Union[BaseEstimator, None] = None,
-        cpcv_num_groups: int = 6,
-        embargo_td: Union[None, pd.Timedelta] = None,
         metalabeling_use_proba_primary_model: bool = True,
         metalabeling_use_predictions_primary_model: bool = True,
         bet_sizer: Union[BetSizingFromProbabilities, None] = None,
     ):
-        self.primary_model = primary_model
+        self.primary_model = None
+        self.metalabeling_model = None
 
         self.feature_transformers_primary_model = (
             feature_transformers_primary_model
@@ -142,83 +132,27 @@ class StrategySignalPipeline:
             else {}
         )
 
+        self.align_on_ = align_on
+        self.align_how_ = align_how
+
         self.feature_transformers_metalabeling_model = (
             feature_transformers_metalabeling_model
             if feature_transformers_metalabeling_model
             else {}
         )
-        self.metalabeling_model = metalabeling_model
-        self.cpcv_num_groups = cpcv_num_groups
 
-        if self.metalabeling_model is not None and not isinstance(
-            embargo_td, pd.Timedelta
-        ):
-            raise ValueError(
-                "Metalabeling model has been provided, so please enter an "
-                "embargo_td (pandas.TimeDelta object)."
-            )
-        self._cv = None
-        self.embargo_td = embargo_td
         self.metalabeling_use_proba_primary_model = metalabeling_use_proba_primary_model
         self.metalabeling_use_predictions_primary_model = (
             metalabeling_use_predictions_primary_model
         )
         self.bet_sizer = bet_sizer
-        self.downsampled_indices_primary = None
-        self.downsampled_indices_metalabeling = None
-        self.sample_weight_primary = None
-        self.sample_weight_metalabeling = None
 
-    def _down_sample(
-        self,
-        X_feature_dict: Dict[str, pd.DataFrame],
-        y: pd.DataFrame,
-        sample_weight: pd.Series = None,
-        downsampled_indices: pd.DatetimeIndex = None,
-    ) -> Tuple[Dict[str, pd.DataFrame], pd.DataFrame, pd.Series]:
-        """
-        Downsample X_features, y and sample weight based on the provided
-        downsampled indices.
+    def set_primary_model(self, primary_model: BaseEstimator):
+        self.primary_model = primary_model
 
-        :param X_feature_dict: dictionary with features for the primary (and
-                               metalabeling model if set) with keys
-                               "primary_model_features" and
-                               "metalabeling_model_features".
-        :type X_feature_dict: Dict[str, pd.DataFrame]
-        :param y: Pandas DataFrame with class labels for the primary model,
-                  where the index is the start_time of the event and the column
-                  "event_end_time" indicates when the event has ended.
-        :type y: pd.DataFrame
-        :param sample_weight: weights to assign to samples in the dataset during
-                              fitting, defaults to None
-        :type sample_weight: pd.Series, optional
-        :param downsampled_indices: series to indicate which samples have been
-                                    selected for downsampling, defaults to None
-        :type downsampled_indices: pd.DatetimeIndex, optional
-        :return: tuple with down samples features X, labels y and sample
-                 weights, respectively.
-        :rtype: Tuple[Dict[str, pd.DataFrame], pd.DataFrame,
-                      pd.Series]
-        """
-        # Getting only the intersected indices between y and the downsampled
-        # indices. This is necessary because during combinatorial cross
-        # validation the size of X and y will be reduced and the downsampled
-        # indices might not be included
-        intersected_downsampled_indices = list(
-            sorted(set(y.index).intersection(set(downsampled_indices)))
-        )
-        y = y.loc[intersected_downsampled_indices]
-
-        if sample_weight:
-            sample_weight = sample_weight.loc[intersected_downsampled_indices]
-
-        for model_key in X_feature_dict.keys():
-            for dataset_key in X_feature_dict[model_key].keys():
-                X_feature_dict[model_key][dataset_key] = X_feature_dict[model_key][
-                    dataset_key
-                ].loc[intersected_downsampled_indices]
-
-        return X_feature_dict, y, sample_weight
+    def set_metalabeling_model(self, metalabeling_model: BaseEstimator):
+        # TODO: check if model is trained
+        self.metalabeling_model = metalabeling_model
 
     def _align_on(
         self, X_features_dict: Dict[str, Dict[str, pd.DataFrame]]
@@ -302,183 +236,6 @@ class StrategySignalPipeline:
 
         return X_features_dict
 
-    # TODO: downsampled_indices should be per model and not global.
-    #  The pipeline won't fit well the use case when is composed of
-    #  a model with sequential information  (e.g. moving averages)
-    #  and a model that needs the down sampling for (computational or
-    #  overfitting) (the same should apply for the sample_weight argument)
-    def fit(
-        self,
-        X_dict: Dict[str, pd.DataFrame],
-        y: pd.DataFrame,
-        label_column_name: str = "label",
-        sample_weight_primary: pd.Series = None,
-        sample_weight_metalabeling: pd.Series = None,
-        downsampled_indices_primary: pd.DatetimeIndex = None,
-        downsampled_indices_metalabeling: pd.DatetimeIndex = None,
-        align_on: str = None,
-        align_how: Dict[str, str] = None,
-    ):
-        """
-        Fit the strategy pipeline
-
-        :param X_dict: Dictionary containing all the features for the data
-                       for the primary and metalabeling model. The data can be
-                       bar and/or tick data
-        :type X_dict:  Dict[str, pd.DataFrame]
-        :param y: Pandas DataFrame with class labels for the primary model,
-                  where the index is the start_time of the event and the column
-                  "event_end_time" indicates when the event has ended.
-        :type y: pd.DataFrame
-        :param label_column_name: The name of the column containing the label
-        :type label_column_name: str
-        :param sample_weight_primary: The sample weights for training the primary model
-        :type sample_weight_primary: pd.Series
-        :param sample_weight_metalabeling: The sample weights for training the metalabeling model
-        :type sample_weight_metalabeling: pd.Series
-        :param downsampled_indices_primary: The indices to use for training the
-                                            primary model, they should be a subset
-                                            of the indices in the dataframes
-        :type downsampled_indices_primary: pd.DatetimeIndex
-        :param downsampled_indices_metalabeling: The indices to use for training the
-                                            metalabeling model, they should be a subset
-                                            of the indices in the dataframes
-        :type downsampled_indices_metalabeling: pd.DatetimeIndex
-        :param align_on: The name of the input dataframe we want to align the
-                         other dataframes to
-        :type align_on: str
-        :param align_how: The methodologies to use for alignment of the
-                          dataframes
-        :type align_how: Dict[str, str]
-        :return: The strategy signal pipeline
-        :rtype: StrategySignalPipeline
-        """
-        assert set(np.unique(y[label_column_name].dropna())).issubset({-1, 0, 1})
-
-        # setting the align_on and align_how variable
-        self._set_align_on(X_dict, align_on, align_how)
-
-        # check if the align_on and align_how variable are set correctly
-        self._check_align_on(X_dict, self.align_on_, self.align_how_)
-
-        # transforming the X_dict using the specified transformers
-        X_features_dict = self.transform(X_dict)
-
-        # Aligning the dictionaries to the data from which the
-        # target has been constructed
-        X_features_dict = self._align_on(X_features_dict)
-
-        # if downsample_indices is different than None then
-        # the attribute downsample_indices is updated with the new value.
-        # This help to refit the model keeping the information of the
-        # downsampled indices
-        if downsampled_indices_primary is not None:
-            self.downsampled_indices_primary = downsampled_indices_primary
-        if downsampled_indices_metalabeling is not None:
-            self.downsampled_indices_metalabeling = downsampled_indices_metalabeling
-
-        # if sample_weight is different than None then the attribute
-        # sample_weight is updated with the new value.
-        # This help to refit the model keeping the information of the
-        # sample weight
-        if sample_weight_primary is not None:
-            self.sample_weight_primary = sample_weight_primary
-        if sample_weight_metalabeling is not None:
-            self.sample_weight_metalabeling = sample_weight_metalabeling
-
-        # If downsampled_indices_primary is set2 for the primary model indices
-        # then we reduced the input data to the selected indices
-        if self.downsampled_indices_primary is not None:
-            (
-                X_features_dict_primary,
-                y_primary,
-                sample_weight_primary,
-            ) = self._down_sample(
-                X_features_dict[self._primary_model_features],
-                y,
-                self.sample_weight_primary,
-                self.downsampled_indices_primary,
-            )
-        else:
-            X_features_dict_primary, y_primary, sample_weight_primary = (
-                X_features_dict[self._primary_model_features],
-                y,
-                self.sample_weight_primary,
-            )
-
-        # If downsampled_indices_primary is set2 for the metalabeling model indices
-        # then we reduced the input data to the selected indices
-        if self.downsampled_indices_metalabeling is not None:
-            (
-                X_features_dict_metalabeling,
-                y_metalabeling,
-                sample_weight_metalabeling,
-            ) = self._down_sample(
-                X_features_dict[self._metalabeling_model_features],
-                y,
-                self.sample_weight_metalabeling,
-                self.downsampled_indices_metalabeling,
-            )
-        else:
-            X_features_dict_metalabeling, y_metalabeling, sample_weight_metalabeling = (
-                X_features_dict[self._metalabeling_model_features],
-                y,
-                self.sample_weight_metalabeling,
-            )
-
-        # align X_dict a dict consisting of dataframes with features and y
-        (
-            X_primary_aligned,
-            y_primary_aligned,
-            sample_weight_primary_aligned,
-        ) = self._align_X_dict_and_y(
-            X_features_dict_primary,
-            y_primary[label_column_name],
-            sample_weight=sample_weight_primary,
-        )
-
-        # fit primary model
-        self.primary_model.fit(
-            X_primary_aligned,
-            y_primary_aligned,
-            sample_weight=sample_weight_primary_aligned,
-        )
-
-        # If metalabeing exists then we fit it
-        if self.metalabeling_model is not None:
-            self._fit_metalabeling_model(
-                X_features_dict_metalabeling,
-                X_primary_aligned,
-                y_metalabeling,
-                y_primary_aligned,
-            )
-        return self
-
-    def _set_cv(self, y: pd.DataFrame, y_primary_aligned: pd.Series) -> None:
-        """
-        Initialise the combinatorial cross validation object
-
-        :param y: Pandas DataFrame with class labels for the primary model, where
-                  the index is the start_time of the event and the column
-                  "event_end_time" indicates when the event has ended.
-        :type y: pd.DataFrame
-        :param y_primary_aligned: The primary model labels aligned with
-                                  the features.
-        :type y_primary_aligned: pd.Series
-        :return: None
-        """
-        # setting this higher than 1 will result in duplicate cv metalabels
-        cpcv_num_test = 1
-        pred_times = y.loc[y_primary_aligned.index].index.to_series()
-        eval_times = y.loc[y_primary_aligned.index, EVENT_END_TIME]
-        self._cv = CombPurgedKFoldCV(
-            n_groups=self.cpcv_num_groups,
-            n_test_splits=cpcv_num_test,
-            pred_times=pred_times,
-            eval_times=eval_times,
-            embargo_td=self.embargo_td,
-        )
-
     def _get_pred_proba_features(
         self,
         primary_model: BaseEstimator,
@@ -529,78 +286,6 @@ class StrategySignalPipeline:
 
         return X_pred_features
 
-    def _get_pred_features_and_metalabels(
-        self,
-        X_primary_aligned: pd.DataFrame,
-        y: pd.DataFrame,
-        y_primary_aligned: pd.Series,
-    ) -> Tuple[pd.DataFrame, pd.Series]:
-        """
-        Computes the cross validated predictions and probabilities of primary model
-        and the cross validated metalabels.
-
-        The features and the labels will be used to fit the metalabeling model.
-
-        :param X_primary_aligned: DataFrame with features of the primary model.
-        :type X_primary_aligned: pd.DataFrame
-        :param y: Pandas DataFrame with class labels for the primary model, where
-                  the index is the start_time of the event and the column
-                  "event_end_time" indicates when the event has ended.
-        :type y: pd.DataFrame
-        :param y_primary_aligned: Pandas Series with class labels to fit the primary model,
-                                  which are aligned with the features in the primary model.
-        :type y_primary_aligned: pd.Series
-        :return: Tuple with the predictive features to be used in the metalabeling model,
-                 and the metalabels, which are used as class labels when fitting the
-                 metalabeling model.
-        :rtype: Tuple[pd.DataFrame, pd.Series]
-        """
-
-        # prepare for cv
-        self._set_cv(y, y_primary_aligned)
-        primary_model_copy = deepcopy(self.primary_model)
-        y_metalabel = pd.Series(dtype=np.float64)
-
-        if self.metalabeling_use_predictions_primary_model:
-            columns = ["primary_side_pred"]
-        else:
-            columns = []
-
-        X_pred_features = pd.DataFrame(columns=columns, index=y_primary_aligned.index)
-        # fitting and predicting the primary model on
-        # the cv splits for the creation of the
-        # metalabeling labels
-        for train_index, val_index in self._cv.split(
-            X=X_primary_aligned, y=y_primary_aligned
-        ):
-            X_train = X_primary_aligned.iloc[train_index]
-            y_train = y_primary_aligned.iloc[train_index]
-            X_val = X_primary_aligned.iloc[val_index]
-            y_val = y_primary_aligned.iloc[val_index]
-            primary_model_copy.fit(X_train, y_train)
-
-            y_pred_val = primary_model_copy.predict(X_val)
-            # create features based on pred and/or pred_proba
-            if self.metalabeling_use_predictions_primary_model:
-                X_pred_features.loc[y_val.index, "primary_side_pred"] = y_pred_val
-
-            if self.metalabeling_use_proba_primary_model:
-                X_pred_features = self._get_pred_proba_features(
-                    primary_model_copy, X_pred_features, X_val, y_val
-                )
-
-            # create metalabels of split
-            y_metalabel_cv = (y_pred_val == y_val).astype(float)
-            y_metalabel = pd.concat([y_metalabel, y_metalabel_cv])
-
-        # sort indices
-        X_pred_features.sort_index(inplace=True)
-        y_metalabel.sort_index(inplace=True)
-
-        self._check_y_metalabel(y_metalabel)
-
-        return X_pred_features, y_metalabel
-
     @staticmethod
     def _check_y_metalabel(y_metalabel: pd.Series):
         """
@@ -620,51 +305,10 @@ class StrategySignalPipeline:
                 f"metalabeling model"
             )
 
-    def _fit_metalabeling_model(
-        self,
-        X_features_dict: Dict[str, pd.DataFrame],
-        X_primary_aligned: pd.DataFrame,
-        y: pd.DataFrame,
-        y_primary_aligned: pd.Series,
-    ) -> None:
-        """
-        Fit the metalabeling model
-
-        :param X_features_dict: Dict containing the transformed features for the
-                                primary and metalabeling model
-        :type X_features_dict: Dict[str, pd.DataFrame]
-        :param X_primary_aligned: DataFrame with features of the primary model.
-        :type X_primary_aligned: pd.DataFrame
-        :param y: target with its info not aligned
-        :type y: pd.DataFrame
-        :param y_primary_aligned: primary target aligned
-        :type y_primary_aligned: pd.Series
-        """
-        # get the predictions from the primary model
-        X_pred_features, y_metalabel = self._get_pred_features_and_metalabels(
-            X_primary_aligned, y, y_primary_aligned
-        )
-        X_features_dict["primary_prediction_features"] = X_pred_features
-
-        # align features and sample weight with target
-        (
-            X_metalabel_aligned,
-            y_metalabel_aligned,
-            sample_weight_metalabel_aligned,
-        ) = self._align_X_dict_and_y(X_features_dict, y_metalabel)
-
-        self.metalabeling_model.fit(
-            X_metalabel_aligned,
-            y_metalabel_aligned,
-            sample_weight=sample_weight_metalabel_aligned,
-        )
-
     @staticmethod
     def _align_X_dict_and_y(
-        X_dict: Dict[str, pd.DataFrame],
-        y: pd.Series,
-        sample_weight: Union[None, pd.Series] = None,
-    ) -> Tuple[pd.DataFrame, pd.Series, pd.Series]:
+        X_dict: Dict[str, pd.DataFrame], y: pd.Series, drop_na: bool = True
+    ) -> Tuple[pd.DataFrame, pd.Series]:
         """
         Align the features in X and the target in y
 
@@ -673,23 +317,22 @@ class StrategySignalPipeline:
         :type X_dict: Dict[str, pd.DataFrame]
         :param y: The target to which the features need to be aligned with
         :type y: pd.Series
-        :param sample_weight: The sample weights
-        :type sample_weight: pd.Series
+
         :return: Features, target and sample weights aligned
         :rtype: Tuple[pd.DataFrame, pd.Series, pd.Series]
         """
-        y_no_nans = y.dropna()
-        # TODO: will not work with bars with different indices (volume vs dollar for example)
-        # probably need to use methods from df.index (index search sorted or something)
-        X = pd.concat([df.loc[y_no_nans.index] for df in X_dict.values()], axis=1)
-        X_aligned = X.dropna()
-        y_aligned = y.loc[X_aligned.index]
-        check_X_y(X_aligned, y_aligned)
 
-        if sample_weight is not None:
-            sample_weight = sample_weight.loc[y_aligned.index]
-
-        return X_aligned, y_aligned, sample_weight
+        if drop_na:
+            y_no_nans = y.dropna()
+            # TODO: test whether the concat below works for different type of bars (e.i. time, volume etc)
+            X = pd.concat([df.loc[y_no_nans.index] for df in X_dict.values()], axis=1)
+            X_aligned = X.dropna()
+            y_aligned = y.loc[X_aligned.index]
+            check_X_y(X_aligned, y_aligned)
+            return X_aligned, y_aligned
+        else:
+            X = pd.concat([df for df in X_dict.values()], axis=1)
+            return X, y
 
     def transform(
         self,
@@ -728,99 +371,7 @@ class StrategySignalPipeline:
             },
         }
 
-    def _set_align_on(
-        self,
-        X_dict: Dict[str, pd.DataFrame],
-        align_on: Union[None, str] = None,
-        align_how: Union[Dict[str, str], None] = None,
-    ) -> None:
-        """
-        Set the alignment variables (align_on_ and align_how) to the pipeline
-        instance.
-
-        :param X_dict: Dictionary containing the dataframe for the primary and
-                       metalabeling model
-        :type X_dict: Dict[str, pd.DataFrame]
-        :param align_on: The key of the dataframe that leads the alignment of
-                         the other dataframes
-        :type align_on: str
-        :param align_how: The methods to use for the alignment
-        :type align_how: Dict[str, str]
-        :return: None
-        """
-        # If align_on is specified we save it in the object along with
-        # the align_how dict otherwise we expect to have only one element
-        # in X_dict key and we save the key in align_on
-        if align_on:
-            self.align_on_ = align_on
-            self.align_how_ = align_how
-        # if self.align_on_ isn't set and align_on is None and
-        # X_dict has only one key then we set align_on
-        # with the first key of the dict
-        elif (
-            align_on is None
-            and not hasattr(self, "align_on_")
-            and len(X_dict.keys()) == 1
-        ):
-            self.align_on_ = list(X_dict.keys())[0]
-            self.align_how_ = None
-
-        elif align_on is None and hasattr(self, "align_on_"):
-            logging.info("align_on_ is already set")
-
-    def _check_align_on(
-        self,
-        X_dict: Dict[str, pd.DataFrame],
-        align_on: Union[None, str] = None,
-        align_how: Dict[str, str] = None,
-    ) -> None:
-        """
-        Checks if align on is set correctly, otherwise raise ValueError
-
-        :param X_dict: A dictionary containing features for the primary and
-                       metalabeling model
-        :type X_dict: Dict[str, pd.DataFrame]
-        :param align_on: The name of the key in X_dict on which the other
-                         dataframes will be aligned on.
-        :return: None
-        """
-        n_sources = len(X_dict.keys())
-
-        # Nothing to check, there is only one data source which is assumed to
-        # be the target datasource
-        if n_sources == 1:
-            return
-
-        if not align_on and (n_sources) > 1:
-            raise ValueError(
-                f"{n_sources} data sources detected, please specify align_on to indicate how to align the features."
-            )
-
-        if align_on and align_on not in X_dict.keys():
-            raise ValueError(
-                f"Value of align_on {align_on}, should be "
-                f"equal to the one of the keys in X_dict {list(X_dict.keys())}."
-            )
-
-        if align_on and not align_how:
-            raise ValueError("align_how is not specified")
-
-        # TODO: this message won't be very readable when align_how has more keys
-        #  than expected.
-        if align_on and not (set(X_dict.keys()) - {align_on}) == set(align_how.keys()):
-            raise ValueError(
-                f"align_how does not have the key/s {(set(X_dict.keys()) - {align_on}) - set(align_how.keys())}"
-            )
-
-        if align_on and not set(self._align_methods.keys()).issuperset(
-            set(align_how.values())
-        ):
-            raise ValueError(
-                f"The method/s {', '.join(set(align_how.values()) - set(self._align_methods.keys()))} is not implemented."
-                f" The allowed alignment methods are {', '.join(self._align_methods.keys())}"
-            )
-
-    def _get_features_for_metalabeling_prediction(
+    def _get_features_for_metalabeling(
         self,
         X_primary_aligned: pd.DataFrame,
         X_features_dict: Dict[str, Dict[str, pd.DataFrame]],
@@ -892,8 +443,6 @@ class StrategySignalPipeline:
         if self.metalabeling_model:
             check_is_fitted(self.metalabeling_model)
 
-        self._check_align_on(X_dict, self.align_on_, self.align_how_)
-
         target_index = X_dict[self.align_on_].index
 
         for df_name, df in X_dict.items():
@@ -920,7 +469,7 @@ class StrategySignalPipeline:
         }
 
         if self.metalabeling_model:
-            X_metalabel_aligned = self._get_features_for_metalabeling_prediction(
+            X_metalabel_aligned = self._get_features_for_metalabeling(
                 X_primary_aligned, X_features_dict
             )
             pred_metalabeling = pd.Series(
@@ -944,14 +493,11 @@ class StrategySignalPipeline:
         # check if the primary model is fitted
         check_is_fitted(self.primary_model)
 
-        # check align_on and how are set correctly
-        self._check_align_on(X_dict, self.align_on_, self.align_how_)
-
         # transforming and aligning X_dict
         X_features_dict = self.transform(X_dict)
         X_features_dict = self._align_on(X_features_dict)
 
-        # concatening all the features dataframes in
+        # concatenating all the features dataframes in
         # one single dataframe that can be used for
         # predictions
         X_primary_aligned = pd.concat(
@@ -981,7 +527,7 @@ class StrategySignalPipeline:
             check_is_fitted(self.metalabeling_model)
 
             # aligning metalabeling model's features
-            X_metalabel_aligned = self._get_features_for_metalabeling_prediction(
+            X_metalabel_aligned = self._get_features_for_metalabeling(
                 X_primary_aligned, X_features_dict
             )
 
@@ -1052,6 +598,80 @@ class StrategySignalPipeline:
         :rtype: pd.Series
         """
         return self.predict(X_dict=X_dict)[self._primary_model_predictions]
+
+    def create_dataset_metalabeling(
+        self,
+        X_dict: Dict[str, pd.DataFrame],
+        y: pd.DataFrame,
+        label_column_name: str = "label",
+    ):
+
+        assert set(np.unique(y[label_column_name].dropna())).issubset({-1, 0, 1})
+
+        # transforming the X_dict using the specified transformers
+        X_features_dict = self.transform(X_dict)
+
+        # Aligning the dictionaries to the data from which the
+        # target has been constructed
+        X_features_dict = self._align_on(X_features_dict)
+
+        # align X_dict a dict consisting of dataframes with features and y
+        (X_primary_aligned, y_primary_aligned,) = self._align_X_dict_and_y(
+            X_features_dict[self._primary_model_features],
+            y[label_column_name],
+        )
+
+        X_metalabel = self._get_features_for_metalabeling(
+            X_primary_aligned, X_features_dict
+        )
+        y_metalabel = (
+            self.primary_model.predict(X_primary_aligned) == y_primary_aligned
+        ).astype(float)
+
+        return X_metalabel, y_metalabel
+
+    def create_dataset_primary(
+        self,
+        X_dict: Dict[str, pd.DataFrame],
+        y: pd.DataFrame,
+        label_column_name: str = "label",
+        drop_na: bool = True,
+    ):
+        """
+        Produce data set for primary model fitting
+
+        :param X_dict: Dictionary containing all the features for the data
+                       for the primary and metalabeling model. The data can be
+                       bar and/or tick data
+        :type X_dict:  Dict[str, pd.DataFrame]
+        :param y: Pandas DataFrame with class labels for the primary model,
+                  where the index is the start_time of the event and the column
+                  "event_end_time" indicates when the event has ended.
+        :type y: pd.DataFrame
+        :param label_column_name: The name of the column containing the label
+        :type label_column_name: str
+        :param drop_na:
+        :type drop_na: bool
+        :return: The strategy signal pipeline
+        :rtype: StrategySignalPipeline
+        """
+        assert set(np.unique(y[label_column_name].dropna())).issubset({-1, 0, 1})
+
+        # TODO: check the align_on dataset has the same indices of the target
+
+        # transforming the X_dict using the specified transformers
+        X_features_dict = self.transform(X_dict)
+
+        # Aligning the dictionaries to the data from which the
+        # target has been constructed
+        X_features_dict = self._align_on(X_features_dict)
+
+        # align X_dict a dict consisting of dataframes with features and y
+        (X_aligned, y_aligned,) = self._align_X_dict_and_y(
+            X_features_dict[self._primary_model_features], y[label_column_name], drop_na
+        )
+
+        return X_aligned, y_aligned
 
 
 class StrategyTrader:

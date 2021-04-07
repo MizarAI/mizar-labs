@@ -29,12 +29,10 @@ def test_pipeline_simple_model(dollar_bar_dataframe, dollar_bar_labels_and_info)
         fill_between_crossovers=True,
     )
     pipeline = StrategySignalPipeline(
-        primary_model=maco, feature_transformers_primary_model={"primary_0": None}
+        feature_transformers_primary_model={"primary_0": None}, align_on="primary_0"
     )
 
-    pipeline.fit(
-        X_dict={"primary_0": dollar_bar_dataframe}, y=dollar_bar_labels_and_info
-    )
+    pipeline.set_primary_model(maco)
 
     pipeline.predict(X_dict={"primary_0": dollar_bar_dataframe})
 
@@ -43,12 +41,6 @@ def test_pipeline_simple_model(dollar_bar_dataframe, dollar_bar_labels_and_info)
     pipeline.get_size(X_dict={"primary_0": dollar_bar_dataframe})
 
     pipeline.get_side(X_dict={"primary_0": dollar_bar_dataframe})
-
-    # TODO: think if we need any assertion here
-
-
-def test_pipeline_sklearn_model(dollar_bar_dataframe):
-    pass
 
 
 @pytest.mark.parametrize("primary_model_num_feature_generators", list(range(3)))
@@ -62,10 +54,6 @@ def test_pipeline_transform(
     """
     Unit test for transform pipeline
     """
-    # init dummy models
-    primary_model = RandomForestClassifier(random_state=1, n_jobs=-1)
-    metalabeling_model = RandomForestClassifier(random_state=1, n_jobs=-1)
-
     # create dict structure for primary model feature generator
     feature_transformers_primary_model = {
         f"primary_{i}": bar_feature_generator
@@ -79,11 +67,9 @@ def test_pipeline_transform(
     }
 
     pipeline = StrategySignalPipeline(
-        primary_model=primary_model,
         feature_transformers_primary_model=feature_transformers_primary_model,
         feature_transformers_metalabeling_model=feature_transformers_metalabeling_model,
-        metalabeling_model=metalabeling_model,
-        embargo_td=pd.Timedelta(0),
+        align_on="primary_0",
     )
 
     # transform data with pipeline
@@ -131,11 +117,9 @@ def test_metalabeling_model_with_moving_average_crossover(
     feature_transformers_metalabeling_model = {"metalabeling_0": bar_feature_generator}
 
     pipeline = StrategySignalPipeline(
-        primary_model=primary_model,
         feature_transformers_primary_model=feature_transformers_primary_model,
         feature_transformers_metalabeling_model=feature_transformers_metalabeling_model,
-        metalabeling_model=metalabeling_model,
-        embargo_td=pd.Timedelta(0),
+        align_on="primary_0",
     )
 
     X_dict = {
@@ -143,18 +127,25 @@ def test_metalabeling_model_with_moving_average_crossover(
         **{"metalabeling_0": dollar_bar_dataframe},
     }
 
-    align_how = {"metalabeling_0": "mean"}
+    pipeline.set_primary_model(primary_model)
 
-    pipeline.fit(
-        X_dict, dollar_bar_labels_and_info, align_on="primary_0", align_how=align_how
+    x_metalabeling, y_metalabeling = pipeline.create_dataset_metalabeling(
+        X_dict, dollar_bar_labels_and_info
     )
+
+    # down-sampling, sample weights
+
+    metalabeling_model.fit(x_metalabeling, y_metalabeling)
+
+    pipeline.set_metalabeling_model(metalabeling_model)
 
     pipeline.predict(X_dict)
 
-    bar_feature_generator.transform(dollar_bar_dataframe)
+    #
+    # bar_feature_generator.transform(dollar_bar_dataframe)
     # TODO: think what assertion we can add here
     # TODO: make model's prediction deterministic so that we can
-    #  assert the predicitons are correc6
+    #  assert the predicitons are correct
 
 
 def test_pipeline_transform_error_raising():
