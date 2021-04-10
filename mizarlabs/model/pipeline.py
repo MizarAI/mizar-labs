@@ -322,7 +322,6 @@ class StrategySignalPipeline:
 
         if drop_na:
             y_no_nans = y.dropna()
-            # TODO: test whether the concat below works for different type of bars (e.i. time, volume etc)
             X = pd.concat([df.loc[y_no_nans.index] for df in X_dict.values()], axis=1)
             X_aligned = X.dropna()
             y_aligned = y.loc[X_aligned.index]
@@ -657,8 +656,6 @@ class StrategySignalPipeline:
         :rtype: StrategySignalPipeline
         """
         assert set(np.unique(y.dropna())).issubset({-1, 0, 1})
-
-        # TODO: check the align_on dataset has the same indices of the target
 
         # transforming the X_dict using the specified transformers
         X_features_dict = self.transform(X_dict)
