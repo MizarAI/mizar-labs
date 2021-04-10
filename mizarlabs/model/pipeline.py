@@ -1,5 +1,4 @@
 import logging
-from copy import deepcopy
 from typing import Dict
 from typing import Tuple
 from typing import Union
@@ -13,9 +12,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils.validation import check_X_y
 
-from mizarlabs.model.model_selection import CombPurgedKFoldCV
 from mizarlabs.static import CLOSE
-from mizarlabs.static import EVENT_END_TIME
 from mizarlabs.static import NUMBER_EXPIRATION_BARS_COLUMN
 from mizarlabs.static import PROFIT_TAKING
 from mizarlabs.static import SIDE
@@ -115,7 +112,7 @@ class StrategySignalPipeline:
             Dict[str, Union[TransformerMixin, None]]
         ],
         align_on: str,
-        align_how: str = "mean",
+        align_how: Dict[str, str],
         feature_transformers_metalabeling_model: Union[
             Dict[str, Union[TransformerMixin, None]]
         ] = None,
@@ -149,10 +146,11 @@ class StrategySignalPipeline:
 
     def set_primary_model(self, primary_model: BaseEstimator):
         self.primary_model = primary_model
+        return self
 
     def set_metalabeling_model(self, metalabeling_model: BaseEstimator):
-        # TODO: check if model is trained
         self.metalabeling_model = metalabeling_model
+        return self
 
     def _align_on(
         self, X_features_dict: Dict[str, Dict[str, pd.DataFrame]]
@@ -439,7 +437,6 @@ class StrategySignalPipeline:
         :return: Predicted probabilities for primary and metalabeling model
         :rtype: Dict[str, pd.DataFrame]
         """
-        check_is_fitted(self.primary_model)
         if self.metalabeling_model:
             check_is_fitted(self.metalabeling_model)
 
@@ -542,9 +539,9 @@ class StrategySignalPipeline:
 
         return probabilities
 
-    def get_size(self, X_dict: Dict[str, pd.DataFrame]) -> pd.Series:
+    def get_side_and_size(self, X_dict: Dict[str, pd.DataFrame]) -> pd.DataFrame:
         """
-        Calculate the size of the position
+        Calculate the side and size of the position
 
         :param X_dict: A dictionary containing features for the primary and
                        meta-labeling model
@@ -552,6 +549,9 @@ class StrategySignalPipeline:
         :return: The sizes of the positions
         :rtype: pd.Series
         """
+
+        side = self.predict(X_dict=X_dict)[self._primary_model_predictions]
+
         predicted_proba_dict = self.predict_proba(X_dict=X_dict)
         predicted_proba = predicted_proba_dict[
             self._metalabeling_model_proba
@@ -579,34 +579,37 @@ class StrategySignalPipeline:
                     self._primary_model_predictions
                 ]
                 pred_and_proba["side"] = predicted_side
-            return self.bet_sizer.transform(pred_and_proba)
+            size = self.bet_sizer.transform(pred_and_proba)
 
         else:
             if self.metalabeling_model:
-                return predicted_proba[1.0]
+                size = predicted_proba[1.0]
             else:
-                return predicted_proba.max(axis=1)
+                size = predicted_proba.max(axis=1)
 
-    def get_side(self, X_dict: Dict[str, pd.DataFrame]) -> pd.Series:
-        """
-        Calculate the side of the position
-
-        :param X_dict: A dictionary containing features for the primary and
-                       meta-labeling model
-        :type X_dict: Dict[str, pd.DataFrame]
-        :return: The sides of the positions
-        :rtype: pd.Series
-        """
-        return self.predict(X_dict=X_dict)[self._primary_model_predictions]
+        return pd.DataFrame({"side": side, "size": size}).dropna()
 
     def create_dataset_metalabeling(
         self,
         X_dict: Dict[str, pd.DataFrame],
-        y: pd.DataFrame,
-        label_column_name: str = "label",
-    ):
+        y: pd.Series,
+    ) -> Tuple[pd.DataFrame, pd.Series]:
 
-        assert set(np.unique(y[label_column_name].dropna())).issubset({-1, 0, 1})
+        """
+        Produce data set for metalabeling model fitting.
+
+        The primary model is expected to be already set in the pipeline
+
+        :param X_dict: Dictionary containing all the features for the data
+                       for the primary and metalabeling model. The data can be
+                       bar and/or tick data
+        :type X_dict:  Dict[str, pd.DataFrame]
+        :param y: Series with class labels for the primary model
+        :type y: pd.Series
+        :return: The strategy signal pipeline
+        :rtype: StrategySignalPipeline
+        """
+        assert set(np.unique(y.dropna())).issubset({-1, 0, 1})
 
         # transforming the X_dict using the specified transformers
         X_features_dict = self.transform(X_dict)
@@ -618,7 +621,7 @@ class StrategySignalPipeline:
         # align X_dict a dict consisting of dataframes with features and y
         (X_primary_aligned, y_primary_aligned,) = self._align_X_dict_and_y(
             X_features_dict[self._primary_model_features],
-            y[label_column_name],
+            y,
         )
 
         X_metalabel = self._get_features_for_metalabeling(
@@ -628,15 +631,17 @@ class StrategySignalPipeline:
             self.primary_model.predict(X_primary_aligned) == y_primary_aligned
         ).astype(float)
 
-        return X_metalabel, y_metalabel
+        return (
+            X_metalabel.loc[X_metalabel.index.intersection(y_metalabel.index)],
+            y_metalabel.loc[X_metalabel.index.intersection(y_metalabel.index)],
+        )
 
     def create_dataset_primary(
         self,
         X_dict: Dict[str, pd.DataFrame],
-        y: pd.DataFrame,
-        label_column_name: str = "label",
+        y: pd.Series,
         drop_na: bool = True,
-    ):
+    ) -> Tuple[pd.DataFrame, pd.Series]:
         """
         Produce data set for primary model fitting
 
@@ -644,18 +649,14 @@ class StrategySignalPipeline:
                        for the primary and metalabeling model. The data can be
                        bar and/or tick data
         :type X_dict:  Dict[str, pd.DataFrame]
-        :param y: Pandas DataFrame with class labels for the primary model,
-                  where the index is the start_time of the event and the column
-                  "event_end_time" indicates when the event has ended.
-        :type y: pd.DataFrame
-        :param label_column_name: The name of the column containing the label
-        :type label_column_name: str
+        :param y: Series with class labels for the primary model
+        :type y: pd.Series
         :param drop_na:
         :type drop_na: bool
         :return: The strategy signal pipeline
         :rtype: StrategySignalPipeline
         """
-        assert set(np.unique(y[label_column_name].dropna())).issubset({-1, 0, 1})
+        assert set(np.unique(y.dropna())).issubset({-1, 0, 1})
 
         # TODO: check the align_on dataset has the same indices of the target
 
@@ -668,7 +669,7 @@ class StrategySignalPipeline:
 
         # align X_dict a dict consisting of dataframes with features and y
         (X_aligned, y_aligned,) = self._align_X_dict_and_y(
-            X_features_dict[self._primary_model_features], y[label_column_name], drop_na
+            X_features_dict[self._primary_model_features], y, drop_na
         )
 
         return X_aligned, y_aligned
@@ -754,9 +755,7 @@ class StrategyTrader:
         self._check_X_dict(X_dict)
 
         # calculating side and size from strategy pipeline
-        signal_df = self.strategy_pipeline.get_side(X_dict).to_frame(name=SIDE)
-        signal_df[SIZE] = self.strategy_pipeline.get_size(X_dict)
-
+        signal_df = self.strategy_pipeline.get_side_and_size(X_dict)
         self._check_signal_has_valid_output(signal_df)
 
         return signal_df
