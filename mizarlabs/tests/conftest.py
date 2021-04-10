@@ -1,34 +1,35 @@
 import datetime
+import string
 from pathlib import Path
+from typing import List
 
-from scipy import sparse
 import numpy as np
 import pandas as pd
 import pytest
+from numpy.random import randn
+from scipy import sparse
+from scipy.stats import norm
+from sklearn.ensemble import RandomForestClassifier
+
+from mizarlabs.model.bootstrapping import get_ind_matrix
+from mizarlabs.model.model_selection import BaseTimeSeriesCrossValidator
+from mizarlabs.model.pipeline import MizarFeatureUnion
+from mizarlabs.model.pipeline import StrategySignalPipeline
+from mizarlabs.static import CLOSE
 from mizarlabs.static import EVENT_END_TIME
 from mizarlabs.static import FIRST_TIMESTAMP
+from mizarlabs.static import LABEL
 from mizarlabs.static import SIDE
 from mizarlabs.static import TIMESTAMP
-from mizarlabs.static import CLOSE
-from mizarlabs.static import LABEL
-from mizarlabs.transformers.trading.bet_sizing import BET_SIZE
-from mizarlabs.transformers.trading.bet_sizing import PREDICTION
-from mizarlabs.transformers.trading.bet_sizing import PROBABILITY
+from mizarlabs.transformers.microstructural_features.vpin import VPIN
 from mizarlabs.transformers.targets.labeling import TripleBarrierMethodLabeling
-from mizarlabs.model.bootstrapping import get_ind_matrix
-from scipy.stats import norm
 from mizarlabs.transformers.technical.moving_average import MovingAverageCrossOver
 from mizarlabs.transformers.technical.moving_average import (
     MovingAverageCrossOverPredictor,
 )
-from numpy.random import randn
-import string
-from mizarlabs.model.model_selection import BaseTimeSeriesCrossValidator
-from sklearn.ensemble import RandomForestClassifier
-from mizarlabs.model.pipeline import StrategySignalPipeline
-from mizarlabs.model.pipeline import MizarFeatureUnion
-from mizarlabs.transformers.microstructural_features.vpin import VPIN
-from typing import List
+from mizarlabs.transformers.trading.bet_sizing import BET_SIZE
+from mizarlabs.transformers.trading.bet_sizing import PREDICTION
+from mizarlabs.transformers.trading.bet_sizing import PROBABILITY
 
 
 def prepare_cv_object(
@@ -302,7 +303,9 @@ def dollar_bar_ind_matrix(dollar_bar_target_labels: pd.DataFrame) -> np.ndarray:
 
 
 @pytest.fixture
-def dollar_bar_ind_matrix_indices(dollar_bar_target_labels: pd.DataFrame) -> List[pd.Timestamp]:
+def dollar_bar_ind_matrix_indices(
+    dollar_bar_target_labels: pd.DataFrame,
+) -> List[pd.Timestamp]:
     _, dollar_bar_ind_matrix_indices = get_ind_matrix(
         samples_info_sets=dollar_bar_target_labels[EVENT_END_TIME],
         price_bars=dollar_bar_target_labels,
@@ -440,17 +443,52 @@ def time_inhomogeneous_data():
 
 @pytest.fixture
 def strategy_signal_pipeline_only_primary(bar_feature_generator):
-    # init dummy models
-    primary_model = RandomForestClassifier(random_state=1, n_jobs=-1)
-
     # create dict structure for primary model feature generator
     feature_transformers_primary_model = {"primary_0": bar_feature_generator}
 
     pipeline = StrategySignalPipeline(
-        primary_model=primary_model,
         feature_transformers_primary_model=feature_transformers_primary_model,
+        align_on="primary_0",
+        align_how={"primary_0": "mean"},
     )
     return pipeline
+
+
+@pytest.fixture
+def strategy_signal_pipeline_only_primary_fitted(
+    strategy_signal_pipeline_only_primary,
+    bar_feature_generator,
+    x_dict_primary,
+    dollar_bar_labels_and_info,
+):
+    # init dummy models
+    primary_model = RandomForestClassifier(random_state=1, n_jobs=-1, max_depth=2)
+
+    X, y = strategy_signal_pipeline_only_primary.create_dataset_primary(
+        x_dict_primary, dollar_bar_labels_and_info["label"]
+    )
+
+    primary_model.fit(X, y)
+
+    return strategy_signal_pipeline_only_primary.set_primary_model(primary_model)
+
+
+@pytest.fixture()
+def bar_feature_generator_longer_warmup(dollar_bar_dataframe):
+    # feature generator
+    fast_window = 20
+    slow_window = 100
+    maco = MovingAverageCrossOver(
+        fast=fast_window,
+        slow=slow_window,
+        column_name=CLOSE,
+        fill_between_crossovers=True,
+    )
+    vpin = VPIN(window=100)
+    bar_feature_generator = MizarFeatureUnion(
+        [("MACO", maco), ("VPIN", vpin)], n_jobs=-1
+    )
+    return bar_feature_generator
 
 
 @pytest.fixture
@@ -473,52 +511,167 @@ def bar_feature_generator(dollar_bar_dataframe):
 
 @pytest.fixture
 def strategy_signal_pipeline_with_metalabeling(bar_feature_generator):
-    # init dummy models
-    primary_model = RandomForestClassifier(random_state=1, n_jobs=-1)
-    metalabeling_model = RandomForestClassifier(random_state=1, n_jobs=-1)
-
-    # create dict structure for primary model feature generator
-    # and metalabeling_model
     feature_transformers_primary_model = {
         "primary_0": bar_feature_generator,
     }
     feature_transformers_metalabeling_model = {"metalabeling_0": bar_feature_generator}
 
     pipeline = StrategySignalPipeline(
-        primary_model=primary_model,
         feature_transformers_primary_model=feature_transformers_primary_model,
         feature_transformers_metalabeling_model=feature_transformers_metalabeling_model,
-        metalabeling_model=metalabeling_model,
-        embargo_td=pd.Timedelta(days=5),
         metalabeling_use_predictions_primary_model=False,
         metalabeling_use_proba_primary_model=False,
+        align_on="primary_0",
+        align_how={"metalabeling_0": "mean"},
     )
     return pipeline
 
 
 @pytest.fixture
 def strategy_signal_pipeline_with_metalabeling_fitted(
-    dollar_bar_dataframe,
-    dollar_bar_labels_and_info,
     strategy_signal_pipeline_with_metalabeling,
+    x_dict_primary_metalabeling,
+    dollar_bar_labels_and_info,
 ):
-    return strategy_signal_pipeline_with_metalabeling.fit(
-        X_dict={
-            "primary_0": dollar_bar_dataframe,
-            "metalabeling_0": dollar_bar_dataframe,
-        },
-        y=dollar_bar_labels_and_info,
+    primary_model = RandomForestClassifier(random_state=1, n_jobs=-1, max_depth=2)
+    metalabeling_model = RandomForestClassifier(random_state=1, n_jobs=-1, max_depth=2)
+    (
+        X_primary,
+        y_primary,
+    ) = strategy_signal_pipeline_with_metalabeling.create_dataset_primary(
+        x_dict_primary_metalabeling, dollar_bar_labels_and_info["label"]
+    )
+    primary_model.fit(X_primary, y_primary)
+    strategy_signal_pipeline_with_metalabeling.set_primary_model(primary_model)
+    (
+        X_meta,
+        y_meta,
+    ) = strategy_signal_pipeline_with_metalabeling.create_dataset_metalabeling(
+        x_dict_primary_metalabeling, dollar_bar_labels_and_info["label"]
+    )
+    metalabeling_model.fit(X_meta, y_meta)
+    strategy_signal_pipeline_with_metalabeling.set_metalabeling_model(
+        metalabeling_model
+    )
+    return strategy_signal_pipeline_with_metalabeling
+
+
+@pytest.fixture
+def strategy_signal_pipeline_with_metalabeling_longer_warm_up_primary(
+    bar_feature_generator, bar_feature_generator_longer_warmup
+):
+    feature_transformers_primary_model = {
+        "primary_0": bar_feature_generator_longer_warmup,
+    }
+    feature_transformers_metalabeling_model = {"metalabeling_0": bar_feature_generator}
+
+    pipeline = StrategySignalPipeline(
+        feature_transformers_primary_model=feature_transformers_primary_model,
+        feature_transformers_metalabeling_model=feature_transformers_metalabeling_model,
+        metalabeling_use_predictions_primary_model=False,
+        metalabeling_use_proba_primary_model=False,
         align_on="primary_0",
         align_how={"metalabeling_0": "mean"},
     )
+    return pipeline
+
+
+@pytest.fixture
+def strategy_signal_pipeline_with_metalabeling_longer_warm_up_primary_fitted(
+    strategy_signal_pipeline_with_metalabeling_longer_warm_up_primary,
+    x_dict_primary_metalabeling,
+    dollar_bar_labels_and_info,
+):
+    primary_model = RandomForestClassifier(random_state=1, n_jobs=-1, max_depth=2)
+    metalabeling_model = RandomForestClassifier(random_state=1, n_jobs=-1, max_depth=2)
+    (
+        X_primary,
+        y_primary,
+    ) = strategy_signal_pipeline_with_metalabeling_longer_warm_up_primary.create_dataset_primary(
+        x_dict_primary_metalabeling, dollar_bar_labels_and_info["label"]
+    )
+    primary_model.fit(X_primary, y_primary)
+    strategy_signal_pipeline_with_metalabeling_longer_warm_up_primary.set_primary_model(
+        primary_model
+    )
+    (
+        X_meta,
+        y_meta,
+    ) = strategy_signal_pipeline_with_metalabeling_longer_warm_up_primary.create_dataset_metalabeling(
+        x_dict_primary_metalabeling, dollar_bar_labels_and_info["label"]
+    )
+    metalabeling_model.fit(X_meta, y_meta)
+    strategy_signal_pipeline_with_metalabeling_longer_warm_up_primary.set_metalabeling_model(
+        metalabeling_model
+    )
+    return strategy_signal_pipeline_with_metalabeling_longer_warm_up_primary
+
+
+@pytest.fixture
+def strategy_signal_pipeline_with_metalabeling_longer_warm_up_metalabeling(
+    bar_feature_generator, bar_feature_generator_longer_warmup
+):
+    feature_transformers_primary_model = {
+        "primary_0": bar_feature_generator,
+    }
+    feature_transformers_metalabeling_model = {
+        "metalabeling_0": bar_feature_generator_longer_warmup
+    }
+
+    pipeline = StrategySignalPipeline(
+        feature_transformers_primary_model=feature_transformers_primary_model,
+        feature_transformers_metalabeling_model=feature_transformers_metalabeling_model,
+        metalabeling_use_predictions_primary_model=False,
+        metalabeling_use_proba_primary_model=False,
+        align_on="primary_0",
+        align_how={"metalabeling_0": "mean"},
+    )
+    return pipeline
+
+
+@pytest.fixture
+def strategy_signal_pipeline_with_metalabeling_longer_warm_up_metalabeling_fitted(
+    strategy_signal_pipeline_with_metalabeling_longer_warm_up_metalabeling,
+    x_dict_primary_metalabeling,
+    dollar_bar_labels_and_info,
+):
+    primary_model = RandomForestClassifier(random_state=1, n_jobs=-1, max_depth=2)
+    metalabeling_model = RandomForestClassifier(random_state=1, n_jobs=-1, max_depth=2)
+    (
+        X_primary,
+        y_primary,
+    ) = strategy_signal_pipeline_with_metalabeling_longer_warm_up_metalabeling.create_dataset_primary(
+        x_dict_primary_metalabeling, dollar_bar_labels_and_info["label"]
+    )
+    primary_model.fit(X_primary, y_primary)
+    strategy_signal_pipeline_with_metalabeling_longer_warm_up_metalabeling.set_primary_model(
+        primary_model
+    )
+    (
+        X_meta,
+        y_meta,
+    ) = strategy_signal_pipeline_with_metalabeling_longer_warm_up_metalabeling.create_dataset_metalabeling(
+        x_dict_primary_metalabeling, dollar_bar_labels_and_info["label"]
+    )
+    metalabeling_model.fit(X_meta, y_meta)
+    strategy_signal_pipeline_with_metalabeling_longer_warm_up_metalabeling.set_metalabeling_model(
+        metalabeling_model
+    )
+    return strategy_signal_pipeline_with_metalabeling_longer_warm_up_metalabeling
+
+
+@pytest.fixture
+def x_dict_primary(dollar_bar_dataframe):
+    return {"primary_0": dollar_bar_dataframe}
+
+
+@pytest.fixture
+def x_dict_primary_metalabeling(dollar_bar_dataframe):
+    return {"primary_0": dollar_bar_dataframe, "metalabeling_0": dollar_bar_dataframe}
 
 
 @pytest.fixture
 def strategy_signal_pipeline_with_metalabeling_and_pred_features(bar_feature_generator):
-    # init dummy models
-    primary_model = RandomForestClassifier(random_state=1, n_jobs=-1)
-    metalabeling_model = RandomForestClassifier(random_state=1, n_jobs=-1)
-
     # create dict structure for primary model feature generator
     # and metalabeling_model
     feature_transformers_primary_model = {
@@ -527,58 +680,43 @@ def strategy_signal_pipeline_with_metalabeling_and_pred_features(bar_feature_gen
     feature_transformers_metalabeling_model = {"metalabeling_0": bar_feature_generator}
 
     pipeline = StrategySignalPipeline(
-        primary_model=primary_model,
         feature_transformers_primary_model=feature_transformers_primary_model,
         feature_transformers_metalabeling_model=feature_transformers_metalabeling_model,
-        metalabeling_model=metalabeling_model,
-        embargo_td=pd.Timedelta(days=5),
         metalabeling_use_predictions_primary_model=True,
         metalabeling_use_proba_primary_model=True,
+        align_on="primary_0",
+        align_how={"metalabeling_0": "mean"},
     )
     return pipeline
 
 
 @pytest.fixture
 def strategy_signal_pipeline_with_metalabeling_and_pred_features_fitted(
-    dollar_bar_dataframe,
-    dollar_bar_labels_and_info,
     strategy_signal_pipeline_with_metalabeling_and_pred_features,
-):
-    return strategy_signal_pipeline_with_metalabeling_and_pred_features.fit(
-        X_dict={
-            "primary_0": dollar_bar_dataframe,
-            "metalabeling_0": dollar_bar_dataframe,
-        },
-        y=dollar_bar_labels_and_info,
-        align_on="primary_0",
-        align_how={"metalabeling_0": "mean"},
-    )
-
-
-@pytest.fixture
-def strategy_signal_pipeline_only_primary(bar_feature_generator):
-    # init dummy models
-    primary_model = RandomForestClassifier(random_state=1, n_jobs=-1)
-
-    # create dict structure for primary model feature generator
-    feature_transformers_primary_model = {"primary_0": bar_feature_generator}
-
-    pipeline = StrategySignalPipeline(
-        primary_model=primary_model,
-        feature_transformers_primary_model=feature_transformers_primary_model,
-    )
-    return pipeline
-
-
-@pytest.fixture
-def strategy_signal_pipeline_only_primary_fitted(
-    dollar_bar_dataframe,
+    x_dict_primary_metalabeling,
     dollar_bar_labels_and_info,
-    strategy_signal_pipeline_only_primary,
 ):
-    return strategy_signal_pipeline_only_primary.fit(
-        X_dict={"primary_0": dollar_bar_dataframe},
-        y=dollar_bar_labels_and_info,
+    primary_model = RandomForestClassifier(random_state=1, n_jobs=-1, max_depth=2)
+    metalabeling_model = RandomForestClassifier(random_state=1, n_jobs=-1, max_depth=2)
+    (
+        X_primary,
+        y_primary,
+    ) = strategy_signal_pipeline_with_metalabeling_and_pred_features.create_dataset_primary(
+        x_dict_primary_metalabeling, dollar_bar_labels_and_info["label"]
+    )
+    primary_model.fit(X_primary, y_primary)
+    strategy_signal_pipeline_with_metalabeling_and_pred_features.set_primary_model(
+        primary_model
+    )
+    (
+        X_meta,
+        y_meta,
+    ) = strategy_signal_pipeline_with_metalabeling_and_pred_features.create_dataset_metalabeling(
+        x_dict_primary_metalabeling, dollar_bar_labels_and_info["label"]
+    )
+    metalabeling_model.fit(X_meta, y_meta)
+    return strategy_signal_pipeline_with_metalabeling_and_pred_features.set_metalabeling_model(
+        metalabeling_model
     )
 
 
@@ -601,6 +739,6 @@ def manual_y_primary(dollar_bar_labels_and_info, manual_X_primary):
 
 @pytest.fixture
 def manual_primary_model_fitted(manual_X_y_primary):
-    return RandomForestClassifier(random_state=1).fit(
+    return RandomForestClassifier(random_state=1, max_depth=2).fit(
         manual_X_y_primary[0], manual_X_y_primary[1]
     )
