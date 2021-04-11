@@ -693,8 +693,6 @@ class StrategyTrader:
         profit_taking_factor: Union[float, None] = None,
         volatility_window: int = 100,
     ):
-        # Check if the strategy pipeline is fitted
-        check_is_fitted(strategy_pipeline, msg="Strategy pipeline should be fitted")
 
         self.strategy_pipeline = strategy_pipeline
         self.min_num_bars = min_num_bars
