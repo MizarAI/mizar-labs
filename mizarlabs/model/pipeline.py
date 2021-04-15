@@ -486,8 +486,6 @@ class StrategySignalPipeline:
         :return: Predicted probabilities for primary and metalabeling model
         :rtype: Dict[str, pd.DataFrame]
         """
-        # check if the primary model is fitted
-        check_is_fitted(self.primary_model)
 
         # transforming and aligning X_dict
         X_features_dict = self.transform(X_dict)
