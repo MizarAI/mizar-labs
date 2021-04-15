@@ -136,7 +136,7 @@ class BetSizingFromProbabilities(BetSizingBase):
         if self._discretise:
             bet_sizing_signal = discretise_signal(bet_sizing_signal, self._step_size)
 
-        return bet_sizing_signal
+        return bet_sizing_signal.abs()
 
 
 def avg_active_signals(
