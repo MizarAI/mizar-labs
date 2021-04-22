@@ -1,8 +1,7 @@
-from sklearn.base import BaseEstimator
-from sklearn.base import TransformerMixin
-import pandas as pd
-from mizarlabs.transformers.technical.factory import TAFactory
 import numpy as np
+import pandas as pd
+
+from mizarlabs.transformers.technical.factory import TAFactory
 
 
 class MeanReversionStrategy:
@@ -18,7 +17,9 @@ class MeanReversionStrategy:
         self.fitted_ = True
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        short_ema = pd.Series(self.short_ema_transformer.transform(X).flatten(), index=X.index)
+        short_ema = pd.Series(
+            self.short_ema_transformer.transform(X).flatten(), index=X.index
+        )
 
         diff_close_short_ema = (X["close"] - short_ema) / short_ema
         signal = pd.Series(0, index=X.index)
