@@ -80,3 +80,52 @@ class BarArrivalRSIStrategy:
         for i, class_value in enumerate(self.classes_):
             probabilities[:, i] = predictions == class_value
         return probabilities
+
+
+class RSIConfirmation:
+    classes_ = [0.0, 1.0]
+    n_classes_ = 2
+
+    def __init__(
+        self,
+        rsi_timeperiod: int,
+        rsi_threshold: int,
+        rsi_confirmation_period: int,
+        rsi_moving_average_window: int,
+    ):
+        self.rsi_timeperiod = rsi_timeperiod
+        self.rsi_threshold = rsi_threshold
+        self.rsi_confirmation_period = rsi_confirmation_period
+        self.rsi_moving_average_window = rsi_moving_average_window
+
+        self.rsi = TAFactory().create_transformer(
+            "RSI", "close", kw_args={"timeperiod": self.rsi_timeperiod}
+        )
+
+        self.fitted_ = True
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        rsi = pd.Series(
+            self.rsi.transform(X).flatten(),
+            index=X.index,
+            name="rsi",
+        )
+
+        rsi_moving_average_increasing = (
+            rsi.rolling(window=self.rsi_moving_average_window).mean().diff() > 0
+        )
+
+        buy_signal = (rsi < self.rsi_threshold).rolling(
+            window=self.rsi_confirmation_period
+        ).apply(lambda x: x.all()).fillna(0).astype(bool) & (
+            rsi_moving_average_increasing
+        )
+
+        return buy_signal.astype(int).fillna(0)
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        predictions = self.predict(X)
+        probabilities = np.zeros(shape=(len(predictions), len(self.classes_)))
+        for i, class_value in enumerate(self.classes_):
+            probabilities[:, i] = predictions == class_value
+        return probabilities
