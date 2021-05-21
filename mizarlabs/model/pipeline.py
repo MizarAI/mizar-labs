@@ -690,6 +690,7 @@ class StrategyTrader:
         stop_loss_factor: Union[float, None] = None,
         profit_taking_factor: Union[float, None] = None,
         volatility_window: int = 100,
+        volatility_adjusted_stop_loss: bool = True,
     ):
 
         self.strategy_pipeline = strategy_pipeline
@@ -699,6 +700,7 @@ class StrategyTrader:
         self.stop_loss_factor = stop_loss_factor
         self.profit_taking_factor = profit_taking_factor
         self.strategy_valid = None
+        self.volatility_adjusted_stop_loss = volatility_adjusted_stop_loss
         # TODO: think about a triple barrier labeling with no
         #  volatility adjustment -> check labeling.py
 
@@ -769,7 +771,9 @@ class StrategyTrader:
         # target dataframe is extracted so that the volatility can be
         # calculated
         strategy_bars_df = X_dict[self.strategy_pipeline.align_on_]
-        volatility = get_daily_vol(strategy_bars_df[CLOSE], self.volatility_window)
+
+        volatility = (get_daily_vol(strategy_bars_df[CLOSE], self.volatility_window)
+                      if self.volatility_adjusted_stop_loss else 1)
 
         # adding stop loss and profit taking
         strategy_bars_df[STOP_LOSS] = volatility * self.stop_loss_factor
