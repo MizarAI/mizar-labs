@@ -1,5 +1,7 @@
+import abc
 import logging
 from typing import Dict
+from typing import Optional
 from typing import Tuple
 from typing import Union
 
@@ -44,6 +46,12 @@ class MizarPipeline(Pipeline):
         if sample_weight is not None:
             fit_params[self.steps[-1][0] + "__sample_weight"] = sample_weight
         return super().fit(X, y, **fit_params)
+
+
+class ClosingPositionsModel(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def close_positions(self, X_dict: Dict[str, pd.DataFrame]):
+        pass
 
 
 class StrategySignalPipeline:
@@ -119,6 +127,7 @@ class StrategySignalPipeline:
         metalabeling_use_proba_primary_model: bool = True,
         metalabeling_use_predictions_primary_model: bool = True,
         bet_sizer: Union[BetSizingFromProbabilities, None] = None,
+        closing_positions_model: Union[ClosingPositionsModel, None] = None,
     ):
         self.primary_model = None
         self.metalabeling_model = None
@@ -143,6 +152,7 @@ class StrategySignalPipeline:
             metalabeling_use_predictions_primary_model
         )
         self.bet_sizer = bet_sizer
+        self.closing_positions_model = closing_positions_model
 
     def set_primary_model(self, primary_model: BaseEstimator):
         self.primary_model = primary_model
@@ -669,6 +679,17 @@ class StrategySignalPipeline:
 
         return X_aligned, y_aligned
 
+    def determine_positions_to_close(self, X_dict: Dict[str, pd.DataFrame]):
+        positions_to_close = None
+        if self.closing_positions_model:
+            positions_to_close = self.closing_positions_model.close_positions(X_dict)
+
+        if positions_to_close not in ("all", "long", "short", None):
+            raise ValueError(
+                "The allowed values from the ClosePositionModel are all, long, short and None"
+            )
+        return positions_to_close
+
 
 class StrategyTrader:
     """
@@ -816,3 +837,8 @@ class StrategyTrader:
             raise ValueError("The position dataframe has duplicated indices")
 
         return position_df
+
+    def determine_positions_to_close(
+        self, X_dict: Dict[str, pd.DataFrame]
+    ) -> Optional[str]:
+        return self.strategy_pipeline.determine_positions_to_close(X_dict)
