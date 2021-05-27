@@ -795,9 +795,15 @@ class StrategyTrader:
         # calculated
         strategy_bars_df = X_dict[self.strategy_pipeline.align_on_]
 
+        volatility_adjusted_stop_loss = (
+            self.volatility_adjusted_stop_loss
+            if hasattr(self, "volatility_adjusted_stop_loss")
+            else True
+        )
+
         volatility = (
             get_daily_vol(strategy_bars_df[CLOSE], self.volatility_window)
-            if self.volatility_adjusted_stop_loss
+            if volatility_adjusted_stop_loss
             else 1
         )
 
