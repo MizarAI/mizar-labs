@@ -681,7 +681,7 @@ class StrategySignalPipeline:
 
     def determine_positions_to_close(self, X_dict: Dict[str, pd.DataFrame]):
         positions_to_close = None
-        if self.closing_positions_model:
+        if hasattr(self, "closing_position_model") and self.closing_positions_model:
             positions_to_close = self.closing_positions_model.close_positions(X_dict)
 
         if positions_to_close not in ("all", "long", "short", None):
