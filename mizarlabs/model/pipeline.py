@@ -712,6 +712,8 @@ class StrategyTrader:
         profit_taking_factor: Union[float, None] = None,
         volatility_window: int = 100,
         volatility_adjusted_stop_loss: bool = True,
+        trailing_take_profit_deviation: float = None,
+        trailing_stop_loss_deviation: float = None,
     ):
 
         self.strategy_pipeline = strategy_pipeline
@@ -722,8 +724,8 @@ class StrategyTrader:
         self.profit_taking_factor = profit_taking_factor
         self.strategy_valid = None
         self.volatility_adjusted_stop_loss = volatility_adjusted_stop_loss
-        # TODO: think about a triple barrier labeling with no
-        #  volatility adjustment -> check labeling.py
+        self.trailing_take_profit_deviation = trailing_take_profit_deviation
+        self.trailing_stop_loss_deviation = trailing_stop_loss_deviation
 
     def _check_X_dict(self, X_dict: Dict[str, pd.DataFrame]):
         """
@@ -793,8 +795,11 @@ class StrategyTrader:
         # calculated
         strategy_bars_df = X_dict[self.strategy_pipeline.align_on_]
 
-        volatility = (get_daily_vol(strategy_bars_df[CLOSE], self.volatility_window)
-                      if self.volatility_adjusted_stop_loss else 1)
+        volatility = (
+            get_daily_vol(strategy_bars_df[CLOSE], self.volatility_window)
+            if self.volatility_adjusted_stop_loss
+            else 1
+        )
 
         # adding stop loss and profit taking
         strategy_bars_df[STOP_LOSS] = volatility * self.stop_loss_factor
@@ -818,8 +823,6 @@ class StrategyTrader:
         :type X_dict: Dict[str, pd.DataFrame]
         :return: The strategy positions and related informations
         """
-        # TODO: compare the predictions of the primary with the metalabeling
-
         # calculating side and size from strategy pipeline
         signal_df = self.create_signal(X_dict)
         strategy_bars_df = self.create_strategy_bars(X_dict)

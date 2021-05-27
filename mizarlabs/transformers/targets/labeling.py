@@ -70,8 +70,6 @@ class BaseLabeling(BaseEstimator, TransformerMixin):
         pass
 
 
-# TODO: think about a triple barrier labeling with no
-#  volatility adjustment
 class TripleBarrierMethodLabeling(BaseLabeling):
     """
     Implements the triple barrier method used to label the target.
