@@ -93,6 +93,8 @@ class TripleBarrierMethodLabeling(BaseLabeling):
     :type side_column_name: str, optional
     :param volatility_window: The number of bars used for the volatility calculation
     :type volatility_window: int, optional
+    :param volatility_adjusted_horizontal_barriers: whether to adjust the horizontal barriers with volatility
+    :type volatility_adjusted_horizontal_barriers: bool
     :param expiration_label: Labels with 0 are returned to indicate expiration / vertical barrier has been hit
     :type expiration_label: bool, optional
     """
@@ -106,6 +108,7 @@ class TripleBarrierMethodLabeling(BaseLabeling):
         close_column_name: str = CLOSE,
         side_column_name: str = SIDE,
         volatility_window: int = 100,
+        volatility_adjusted_horizontal_barriers: bool = True,
         expiration_label: bool = False,
     ):
         super().__init__(num_expiration_bars)
@@ -114,6 +117,9 @@ class TripleBarrierMethodLabeling(BaseLabeling):
         self.metalabeling = metalabeling
         self.close_column_name = close_column_name
         self.side_column_name = side_column_name
+        self.volatility_adjusted_horizontal_barriers = (
+            volatility_adjusted_horizontal_barriers
+        )
         self.volatility_window = volatility_window
         self.expiration_label = expiration_label
         if self.metalabeling:
@@ -155,9 +161,12 @@ class TripleBarrierMethodLabeling(BaseLabeling):
             pd.Series(barriers_info_df.index).shift(-self.n_expiration_bars).values
         )
 
-        barriers_info_df[DAILY_VOL] = get_daily_vol(
-            y[self.close_column_name], self.volatility_window
+        barriers_info_df[DAILY_VOL] = (
+            get_daily_vol(y[self.close_column_name], self.volatility_window)
+            if self.volatility_adjusted_horizontal_barriers
+            else 1
         )
+
         if SIDE not in y.columns:
             barriers_info_df[self.side_column_name] = 1
         else:
