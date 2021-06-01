@@ -714,6 +714,8 @@ class StrategyTrader:
         volatility_adjusted_stop_loss: bool = True,
         trailing_take_profit_deviation: float = None,
         trailing_stop_loss_deviation: float = None,
+        stop_loss_tick_level: bool = False,
+        take_profit_tick_level: bool = False,
     ):
 
         self.strategy_pipeline = strategy_pipeline
@@ -726,6 +728,8 @@ class StrategyTrader:
         self.volatility_adjusted_stop_loss = volatility_adjusted_stop_loss
         self.trailing_take_profit_deviation = trailing_take_profit_deviation
         self.trailing_stop_loss_deviation = trailing_stop_loss_deviation
+        self.stop_loss_tick_level = stop_loss_tick_level
+        self.take_profit_tick_level = take_profit_tick_level
 
     def _check_X_dict(self, X_dict: Dict[str, pd.DataFrame]):
         """
